@@ -1,0 +1,7 @@
+poulet_py[qst]
+rich
+matplotlib
+python-dotenv
+numpy
+pytest
+Pillow
