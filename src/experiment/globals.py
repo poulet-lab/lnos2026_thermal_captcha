@@ -23,3 +23,36 @@ SCHEMATIC_Y_MAX = BASELINE_TEMPERATURE + max(AMPLITUDES) + SCHEMATIC_Y_MARGIN
 
 FAST_RATE = 300.0  # °C/s
 MIN_HOLD_MS = 10
+
+# --- Hardware and display (edit for your setup) ---
+
+# Serial port for the QST thermode (Windows: COM3, Linux: /dev/ttyUSB0, etc.)
+TCS_PORT = "COM3"
+
+# Safety cap for stimulus temperature (°C)
+TCS_MAXIMUM_TEMPERATURE = 45.0
+
+# True = no hardware (testing / development); False = real thermode
+MOCK_TCS = True
+
+# True = real hardware test runs (ranked separately from LNOS event data)
+TROUBLESHOOTING = False
+
+# Which monitor shows the participant UI (0 = leftmost in Windows display order)
+SECOND_MONITOR_INDEX = 0
+
+# Fallback horizontal offset if monitor detection fails (often = primary monitor width)
+SECOND_MONITOR_OFFSET = 1920
+
+ENVIRONMENT_MOCK_TCS = "mock_tcs"
+ENVIRONMENT_TROUBLESHOOTING = "troubleshooting"
+ENVIRONMENT_LNOS = "lnos"
+
+
+def current_environment() -> str:
+    """Label for the active run mode; drives CSV tagging and within-mode rankings."""
+    if MOCK_TCS:
+        return ENVIRONMENT_MOCK_TCS
+    if TROUBLESHOOTING:
+        return ENVIRONMENT_TROUBLESHOOTING
+    return ENVIRONMENT_LNOS

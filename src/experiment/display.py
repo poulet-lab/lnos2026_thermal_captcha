@@ -12,8 +12,7 @@ from tkinter import font as tkfont
 
 from PIL import Image, ImageTk
 
-from .config import Settings, load_settings
-from .globals import CHOICE_COUNT, STIMULUS_TRACES_DIR
+from .globals import CHOICE_COUNT, SECOND_MONITOR_INDEX, SECOND_MONITOR_OFFSET, STIMULUS_TRACES_DIR
 from .monitors import force_window_to_monitor, get_monitor
 from .ui_strings import (
     comparison_results_sections,
@@ -53,8 +52,7 @@ class _Payload:
 class ParticipantDisplay:
     """Thread-safe fullscreen display on the second monitor."""
 
-    def __init__(self, settings: Settings | None = None, traces_dir: Path | None = None):
-        self.settings = settings or load_settings()
+    def __init__(self, traces_dir: Path | None = None):
         self.traces_dir = traces_dir or STIMULUS_TRACES_DIR
         self._queue: queue.Queue[_Payload] = queue.Queue()
         self._choice_event = threading.Event()
@@ -417,8 +415,8 @@ class ParticipantDisplay:
 
     def _place_on_second_monitor(self, root: tk.Tk):
         monitor = get_monitor(
-            self.settings.second_monitor_index,
-            fallback_offset=self.settings.second_monitor_offset,
+            SECOND_MONITOR_INDEX,
+            fallback_offset=SECOND_MONITOR_OFFSET,
         )
         root.overrideredirect(True)
         root.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")

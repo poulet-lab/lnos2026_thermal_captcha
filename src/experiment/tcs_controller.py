@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from .config import Settings, load_settings
+from .globals import MOCK_TCS, TCS_MAXIMUM_TEMPERATURE, TCS_PORT
 from .stimuli import StimulusDefinition
 
 if TYPE_CHECKING:
@@ -13,13 +13,12 @@ if TYPE_CHECKING:
 
 
 class ThermodeController:
-    def __init__(self, settings: Settings | None = None):
-        self.settings = settings or load_settings()
+    def __init__(self) -> None:
         self._device: TCS | None = None
 
     @property
     def is_mock(self) -> bool:
-        return self.settings.mock_tcs
+        return MOCK_TCS
 
     def open(self) -> None:
         if self.is_mock:
@@ -27,8 +26,8 @@ class ThermodeController:
         from poulet_py import TCS
 
         self._device = TCS(
-            port=self.settings.tcs_port,
-            maximum_temperature=self.settings.tcs_maximum_temperature,
+            port=TCS_PORT,
+            maximum_temperature=TCS_MAXIMUM_TEMPERATURE,
         )
         self._device.open()
 

@@ -18,6 +18,7 @@ python -m src.experiment.run
 | `stimuli.py` | Stimulus pool + TCS parameters |
 | `schematics.py` | Pre-render trace PNGs |
 | `tcs_controller.py` | QST thermode (mock or real) |
+| `globals.py` | Paths, trial constants, TCS & monitor settings |
 | `responses.py` | Append trials to CSV |
 | `rankings.py` | Score / trace rankings |
 

@@ -26,7 +26,6 @@ MANIFEST
 profile_default/
 ipython_config.py
 __pypackages__/
-.env
 .venv
 env/
 venv/

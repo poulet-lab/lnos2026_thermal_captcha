@@ -7,18 +7,36 @@ import sys
 import traceback
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from .config import load_settings
 from .game import run_game
-from .globals import TRIALS_PER_PERSON
+from .globals import MOCK_TCS, TCS_PORT, TRIALS_PER_PERSON, current_environment
 from .rankings import person_scores, score_distribution, stimulus_trace_ranking
 from .session_log import log_error, log_script_event
 from .tcs_controller import ThermodeController
 
 console = Console()
 _thermode: ThermodeController | None = None
+
+EXIT_REMINDER = (
+    "If there aren't any errors and you want to start the game again, please close "
+    "the window and click on the Desktop icon again. If there are errors, please take "
+    "a picture or copy them and save them so we can resolve them later."
+)
+
+
+def show_exit_reminder() -> None:
+    console.print()
+    console.print(
+        Panel(
+            f"[bold yellow]{EXIT_REMINDER}[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2),
+        )
+    )
+    console.print()
 
 
 def _signal_handler(sig, frame) -> None:
@@ -35,9 +53,8 @@ def _signal_handler(sig, frame) -> None:
 
 def display_main_menu() -> str:
     console.rule("[bold cyan]THERMAL CAPTCHA — CONTROL PANEL")
-    settings = load_settings()
-    mode = "[yellow]MOCK TCS[/yellow]" if settings.mock_tcs else f"[green]TCS {settings.tcs_port}[/green]"
-    console.print(f"Mode: {mode}\n")
+    mode = "[yellow]MOCK TCS[/yellow]" if MOCK_TCS else f"[green]TCS {TCS_PORT}[/green]"
+    console.print(f"Mode: {mode}  |  Environment: [cyan]{current_environment()}[/cyan]\n")
     console.print("[purple]1.[/purple] Start game")
     console.print("[purple]2.[/purple] See stimulus-trace ranking")
     console.print("[purple]3.[/purple] See person ranking")
@@ -49,8 +66,9 @@ def display_main_menu() -> str:
 
 
 def show_trace_ranking() -> None:
-    ranking = stimulus_trace_ranking()
-    table = Table(title="Stimulus trace ranking (correct identifications)")
+    environment = current_environment()
+    ranking = stimulus_trace_ranking(environment=environment)
+    table = Table(title=f"Stimulus trace ranking — {environment}")
     table.add_column("Stimulus", style="cyan")
     table.add_column("Correct count", justify="right")
     if not ranking:
@@ -62,8 +80,9 @@ def show_trace_ranking() -> None:
 
 
 def show_person_ranking() -> None:
-    dist = score_distribution()
-    table = Table(title="Person score distribution")
+    environment = current_environment()
+    dist = score_distribution(environment=environment)
+    table = Table(title=f"Person score distribution — {environment}")
     table.add_column("Score (out of 10)", justify="right")
     table.add_column("Number of people", justify="right")
     if not dist:
@@ -73,9 +92,9 @@ def show_person_ranking() -> None:
         if score in dist:
             table.add_row(str(score), str(dist[score]))
     console.print(table)
-    scores = person_scores()
+    scores = person_scores(environment=environment)
     if scores:
-        console.print(f"\n[dim]{len(scores)} people played so far.[/dim]")
+        console.print(f"\n[dim]{len(scores)} people played in {environment} so far.[/dim]")
 
 
 def main() -> None:
@@ -87,7 +106,7 @@ def main() -> None:
         choice = display_main_menu()
         if choice == "start_game":
             try:
-                run_game(settings=load_settings())
+                run_game()
             except KeyboardInterrupt:
                 console.print("\n[yellow]Game interrupted.[/yellow]")
         elif choice == "trace_ranking":
@@ -95,7 +114,8 @@ def main() -> None:
         elif choice == "person_ranking":
             show_person_ranking()
         elif choice == "exit":
-            console.print("\n[bold green]Goodbye![/bold green]")
+            show_exit_reminder()
+            console.print("[bold green]Goodbye![/bold green]")
             break
         else:
             console.print("[red]Invalid choice. Enter 0, 1, 2, or 3.[/red]")

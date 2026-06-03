@@ -59,3 +59,33 @@ def test_is_first_player(tmp_path, monkeypatch):
     append_trial(2, 1, "flat", "flat", True, path=path)
     assert is_first_player(exclude_person=2) is False
     assert is_first_player(exclude_person=1) is False
+
+
+def test_rankings_ignore_other_environments(tmp_path, monkeypatch):
+    from src.experiment import responses as resp_mod
+    from src.experiment.globals import ENVIRONMENT_LNOS, ENVIRONMENT_MOCK_TCS
+
+    path = tmp_path / "responses.csv"
+    monkeypatch.setattr(resp_mod, "RESPONSES_CSV", path)
+
+    for trial in range(1, 11):
+        append_trial(
+            1, trial, "flat", "flat", trial <= 8, path=path, environment=ENVIRONMENT_MOCK_TCS
+        )
+    for trial in range(1, 11):
+        append_trial(
+            1, trial, "flat", "flat", trial <= 3, path=path, environment=ENVIRONMENT_LNOS
+        )
+
+    above, same, below = score_comparison(
+        8, exclude_person=1, environment=ENVIRONMENT_MOCK_TCS
+    )
+    assert same == 0
+    assert above == 0
+    assert below == 0
+    assert is_first_player(exclude_person=2, environment=ENVIRONMENT_MOCK_TCS) is False
+    assert is_first_player(exclude_person=1, environment=ENVIRONMENT_LNOS) is True
+
+    dist = score_distribution(environment=ENVIRONMENT_LNOS)
+    assert dist[3] == 1
+    assert score_distribution(environment=ENVIRONMENT_MOCK_TCS)[8] == 1

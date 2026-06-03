@@ -14,7 +14,7 @@ See **[PLAN.md](PLAN.md)** for design notes and progress.
 | **micromamba** or **conda** | Recommended for environment setup |
 | **poulet_py** | Sibling repo with QST thermode support — see below |
 | **Second monitor** | Participant display (Tkinter fullscreen) |
-| **QST thermode** (optional) | Only needed when `MOCK_TCS=false` |
+| **QST thermode** (optional) | Only needed when `MOCK_TCS = False` in `globals.py` |
 
 ---
 
@@ -112,50 +112,47 @@ sudo apt install python3.11-tk
 
 ---
 
-## 3. Configure environment variables
+## 3. Configure settings
 
-Copy the example file and edit it for your machine.
+Edit **`src/experiment/globals.py`** for your machine. At the bottom of the file:
 
-**Windows:**
-
-```powershell
-cd C:\Users\YOUR_USER\Documents\projects\lnos2026_thermal_captcha
-copy .env.example .env
-notepad .env
-```
-
-**macOS / Linux:**
-
-```bash
-cd ~/projects/lnos2026_thermal_captcha
-cp .env.example .env
-nano .env
-```
-
-Example `.env`:
-
-```env
+```python
 # Serial port for the QST thermode (Windows: COM3, Linux: /dev/ttyUSB0, etc.)
-TCS_PORT=COM3
+TCS_PORT = "COM3"
 
 # Safety cap for stimulus temperature (°C)
-TCS_MAXIMUM_TEMPERATURE=45
+TCS_MAXIMUM_TEMPERATURE = 45.0
 
-# true = no hardware (testing / development); false = real thermode
-MOCK_TCS=true
+# True = no hardware (testing / development); False = real thermode
+MOCK_TCS = True
+
+# True = real hardware test runs (ranked separately from LNOS event data)
+TROUBLESHOOTING = False
 
 # Which monitor shows the participant UI (0 = leftmost in Windows display order)
-SECOND_MONITOR_INDEX=0
+SECOND_MONITOR_INDEX = 0
 
 # Fallback horizontal offset if monitor detection fails (often = primary monitor width)
-SECOND_MONITOR_OFFSET=1920
+SECOND_MONITOR_OFFSET = 1920
 ```
+
+### Run environments
+
+Each game session is tagged with an **environment** in `responses.csv`. Person numbers and rankings are **separate within each environment**:
+
+| Environment | When |
+|-------------|------|
+| `mock_tcs` | `MOCK_TCS = True` |
+| `troubleshooting` | `MOCK_TCS = False` and `TROUBLESHOOTING = True` |
+| `lnos` | `MOCK_TCS = False` and `TROUBLESHOOTING = False` (event day) |
+
+Example: person 8 in `mock_tcs` and person 1 in `lnos` are independent — rankings never mix across environments.
 
 ### Finding the right monitor settings
 
 When you start a game, the operator terminal prints detected monitors and which one is used. If the window appears on the wrong screen:
 
-1. Try `SECOND_MONITOR_INDEX=0`, then `1`, etc.
+1. Try `SECOND_MONITOR_INDEX = 0`, then `1`, etc.
 2. If detection fails, set `SECOND_MONITOR_OFFSET` to your primary monitor width in pixels (e.g. `1920` or `2560`).
 
 ---
@@ -205,18 +202,66 @@ The operator stays at the terminal menu; only the participant screen uses Enter 
 
 ---
 
+## Desktop shortcut (Windows)
+
+For event-day use, create a **Desktop icon** that opens the operator menu in a PowerShell window (same pattern as other lab experiments).
+
+### 1. Launcher script
+
+This repo includes `scripts/run_thermal_captcha.ps1`. It activates the micromamba environment, updates the repo, and runs the game:
+
+```powershell
+micromamba activate lnos2026_thermal_captcha
+cd path\to\lnos2026_thermal_captcha
+git pull --ff-only
+python -m src.experiment.run
+```
+
+### 2. Create the shortcut
+
+1. Right-click the Desktop → **New** → **Shortcut**.
+2. **Target** (one line — adjust the path if your clone lives elsewhere):
+
+```
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoExit -ExecutionPolicy Bypass -File "C:\Users\iezquer\Documents\projects\lnos2026_thermal_captcha\scripts\run_thermal_captcha.ps1"
+```
+
+3. Name it e.g. **Thermal Captcha**.
+4. (Optional) Right-click the shortcut → **Properties** → **Change Icon** to pick a custom `.ico`.
+
+`-NoExit` keeps the window open after you choose **0. Exit**, so you can read any errors or the yellow restart reminder.
+
+### 3. Restarting between sessions
+
+When you exit the menu (**0**), the terminal shows a yellow reminder:
+
+- **No errors:** close the PowerShell window, then double-click the Desktop icon again to start fresh.
+- **Errors:** take a screenshot or copy the text and save it for debugging.
+
+### Requirements
+
+- **micromamba** must be on your PATH (same as for manual runs).
+- Run `micromamba create -f environment.yml` once before using the shortcut.
+- Set monitor and TCS options in `src/experiment/globals.py`.
+
+---
+
 ## 6. Real hardware (event day)
 
 1. Connect the QST thermode and note the serial port (`COM3` on Windows, etc.).
-2. Edit `.env`:
+2. Edit `src/experiment/globals.py`:
 
-```env
-MOCK_TCS=false
-TCS_PORT=COM3
-TCS_MAXIMUM_TEMPERATURE=45
+```python
+MOCK_TCS = False
+TROUBLESHOOTING = True   # hardware checks before the event
+# or
+MOCK_TCS = False
+TROUBLESHOOTING = False  # LNOS event day → environment "lnos"
+TCS_PORT = "COM3"
+TCS_MAXIMUM_TEMPERATURE = 45.0
 ```
 
-3. Run a short test session with `MOCK_TCS=false` before participants arrive.
+3. Run a short test session with `MOCK_TCS = False` before participants arrive.
 4. Use **Ctrl+C** in the operator terminal to halt the thermode safely if needed.
 
 ---
@@ -235,7 +280,7 @@ pytest
 
 | Path | Content |
 |------|---------|
-| `data/raw/responses.csv` | One row per trial (person, stimulus, choice, correct) |
+| `data/raw/responses.csv` | One row per trial (environment, person, stimulus, choice, correct) |
 | `data/other/logs/sessions.csv` | Session start/end and errors |
 
 These paths are created automatically when you run the game.
@@ -248,13 +293,13 @@ These paths are created automatically when you run the game.
 Install the sibling repo: `pip install -e ../poulet_py[qst]` (from this project root).
 
 **Participant window on wrong monitor**  
-Adjust `SECOND_MONITOR_INDEX` and `SECOND_MONITOR_OFFSET` in `.env`; check monitor lines printed when a game starts.
+Adjust `SECOND_MONITOR_INDEX` and `SECOND_MONITOR_OFFSET` in `src/experiment/globals.py`; check monitor lines printed when a game starts.
 
 **Missing trace images / choice screen error**  
 Run `python -m src.experiment.generate_schematics`.
 
 **Thermode not responding**  
-Confirm `TCS_PORT`, drivers, and that no other program holds the serial port. Test with `MOCK_TCS=true` first.
+Confirm `TCS_PORT` in `globals.py`, drivers, and that no other program holds the serial port. Test with `MOCK_TCS = True` first.
 
 **Display does not open (Linux)**  
 Install `python3.11-tk` (or equivalent for your Python version).
@@ -266,12 +311,13 @@ Install `python3.11-tk` (or equivalent for your Python version).
 ```
 lnos2026_thermal_captcha/
 ├── src/experiment/       # Game code (run, game, display, stimuli, TCS)
+│   └── globals.py        # Paths, trial constants, TCS & monitor settings
 ├── reports/stimulus_traces/   # Generated schematic PNGs
 ├── data/raw/             # responses.csv
 ├── tests/                # pytest suite
 ├── environment.yml       # micromamba / conda env
 ├── requirements.txt      # pip dependencies
-└── .env.example          # copy to .env
+└── scripts/run_thermal_captcha.ps1   # Windows Desktop shortcut launcher
 ```
 
 More detail: [`src/experiment/README.md`](src/experiment/README.md).

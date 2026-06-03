@@ -5,10 +5,16 @@ from __future__ import annotations
 import random
 
 from rich.console import Console
+from rich.panel import Panel
 
-from .config import Settings, load_settings
 from .display import ParticipantDisplay
-from .globals import CHOICE_COUNT, TRIALS_PER_PERSON
+from .globals import (
+    CHOICE_COUNT,
+    SECOND_MONITOR_INDEX,
+    SECOND_MONITOR_OFFSET,
+    TRIALS_PER_PERSON,
+    current_environment,
+)
 from .monitors import format_monitors_for_log, get_monitor
 from .rankings import is_first_player, score_comparison
 from .responses import append_trial, next_person_number
@@ -36,24 +42,32 @@ def sample_choice_options(correct_name: str) -> list[str]:
 def run_game(
     display: ParticipantDisplay | None = None,
     thermode: ThermodeController | None = None,
-    settings: Settings | None = None,
 ) -> int:
-    settings = settings or load_settings()
     person = next_person_number()
-    console.print(f"\n[bold green]Starting game for Person {person}[/bold green]")
+    environment = current_environment()
+    console.print(f"\n[bold green]Starting game for Person {person}[/bold green] [dim]({environment})[/dim]")
     console.print("[dim]Detected monitors:[/dim]")
     for line in format_monitors_for_log():
         console.print(f"[dim]{line}[/dim]")
-    target = get_monitor(settings.second_monitor_index, settings.second_monitor_offset)
+    target = get_monitor(SECOND_MONITOR_INDEX, SECOND_MONITOR_OFFSET)
     console.print(
-        f"[dim]Using monitor [{settings.second_monitor_index}]: "
+        f"[dim]Using monitor [{SECOND_MONITOR_INDEX}]: "
         f"{target.width}x{target.height} at ({target.x}, {target.y})[/dim]"
     )
+    console.print()
+    console.print(
+        Panel(
+            "[bold yellow]Click once on the other screen to show the screen of the Thermal Captcha game[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2),
+        )
+    )
+    console.print()
 
     own_display = display is None
     own_thermode = thermode is None
-    display = display or ParticipantDisplay(settings=settings)
-    thermode = thermode or ThermodeController(settings=settings)
+    display = display or ParticipantDisplay()
+    thermode = thermode or ThermodeController()
 
     if own_display:
         display.start()
@@ -81,17 +95,19 @@ def run_game(
             correct = chosen == stimulus.name
             if correct:
                 score += 1
-            append_trial(person, trial_idx, stimulus.name, chosen, correct)
+            append_trial(person, trial_idx, stimulus.name, chosen, correct, environment=environment)
             console.print(
                 f"  chosen={chosen} [{'green' if correct else 'red'}]"
                 f"{'✓' if correct else '✗'}[/]"
             )
 
-        first = is_first_player(exclude_person=person)
+        first = is_first_player(exclude_person=person, environment=environment)
         if first:
             display.show_results(score, is_first_player=True)
         else:
-            above, same, below = score_comparison(score, exclude_person=person)
+            above, same, below = score_comparison(
+                score, exclude_person=person, environment=environment
+            )
             display.show_results(
                 score,
                 is_first_player=False,

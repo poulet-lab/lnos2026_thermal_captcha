@@ -6,9 +6,37 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
-from .globals import DATA_RAW, RESPONSES_CSV
+from .globals import DATA_RAW, ENVIRONMENT_MOCK_TCS, RESPONSES_CSV, current_environment
 
-FIELDNAMES = ("timestamp", "person", "trial", "stimulus_type", "chosen", "correct")
+FIELDNAMES = (
+    "timestamp",
+    "environment",
+    "person",
+    "trial",
+    "stimulus_type",
+    "chosen",
+    "correct",
+)
+
+
+def _normalize_row(row: dict[str, str]) -> dict[str, str]:
+    if not row.get("environment"):
+        row["environment"] = ENVIRONMENT_MOCK_TCS
+    return row
+
+
+def _migrate_responses_file(path: Path) -> None:
+    if not path.exists():
+        return
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if not reader.fieldnames or "environment" in reader.fieldnames:
+            return
+        rows = [_normalize_row(dict(row)) for row in reader]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def _ensure_responses_file(path: Path = RESPONSES_CSV) -> None:
@@ -16,14 +44,24 @@ def _ensure_responses_file(path: Path = RESPONSES_CSV) -> None:
     if not path.exists():
         with open(path, "w", newline="", encoding="utf-8") as f:
             csv.DictWriter(f, fieldnames=FIELDNAMES).writeheader()
+        return
+    _migrate_responses_file(path)
 
 
-def next_person_number(path: Path | None = None) -> int:
+def next_person_number(
+    path: Path | None = None,
+    *,
+    environment: str | None = None,
+) -> int:
     path = path or RESPONSES_CSV
+    environment = environment or current_environment()
     _ensure_responses_file(path)
     max_person = 0
     with open(path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
+            row = _normalize_row(row)
+            if row["environment"] != environment:
+                continue
             try:
                 max_person = max(max_person, int(row["person"]))
             except (KeyError, ValueError):
@@ -38,14 +76,18 @@ def append_trial(
     chosen: str,
     correct: bool,
     path: Path | None = None,
+    *,
+    environment: str | None = None,
 ) -> None:
     path = path or RESPONSES_CSV
+    environment = environment or current_environment()
     _ensure_responses_file(path)
     with open(path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
         writer.writerow(
             {
                 "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "environment": environment,
                 "person": person,
                 "trial": trial,
                 "stimulus_type": stimulus_type,
@@ -55,9 +97,17 @@ def append_trial(
         )
 
 
-def load_responses(path: Path | None = None) -> list[dict[str, str]]:
+def load_responses(
+    path: Path | None = None,
+    *,
+    environment: str | None = None,
+) -> list[dict[str, str]]:
     path = path or RESPONSES_CSV
     if not path.exists():
         return []
+    _ensure_responses_file(path)
     with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+        rows = [_normalize_row(row) for row in csv.DictReader(f)]
+    if environment is None:
+        return rows
+    return [row for row in rows if row["environment"] == environment]
