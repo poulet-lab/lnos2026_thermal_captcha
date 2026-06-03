@@ -66,6 +66,8 @@ def run_game(
         display.wait_for_enter()
         display.show_instructions()
         display.wait_for_enter()
+        display.show_ready()
+        display.wait_for_enter()
 
         trials = sample_trial_stimuli()
         for trial_idx, stimulus in enumerate(trials, start=1):
@@ -100,6 +102,8 @@ def run_game(
         console.print(
             f"\n[bold]Person {person} finished: {score}/{TRIALS_PER_PERSON} correct[/bold]"
         )
+        display.wait_for_enter()
+        display.show_thanks()
         display.wait_for_enter()
         return person
     finally:

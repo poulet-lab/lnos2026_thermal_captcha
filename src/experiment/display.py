@@ -13,8 +13,16 @@ from tkinter import font as tkfont
 from PIL import Image, ImageTk
 
 from .config import Settings, load_settings
-from .globals import CHOICE_COUNT, STIMULUS_TRACES_DIR, TRIALS_PER_PERSON
+from .globals import CHOICE_COUNT, STIMULUS_TRACES_DIR
 from .monitors import force_window_to_monitor, get_monitor
+from .ui_strings import (
+    comparison_results_sections,
+    first_player_results_sections,
+    instructions_screen_sections,
+    ready_screen_parts,
+    thanks_screen_parts,
+    title_screen_parts,
+)
 
 # Dark theme
 BG = "#000000"
@@ -24,23 +32,14 @@ BTN_ACTIVE = "#222222"
 TRACE_PAD = "#1a1a1a"
 
 
-def format_comparison_lines(score: int, above: int, same: int, below: int) -> list[str]:
-    """Build social-comparison lines; omit above at perfect score, below at zero."""
-    lines: list[str] = []
-    if score < TRIALS_PER_PERSON:
-        lines.append(f"{above} people got {score + 1} or more correct")
-    lines.append(f"{same} people got the same as you ({score})")
-    if score > 0:
-        lines.append(f"{below} people got {score - 1} or less")
-    return lines
-
-
 class _Command(Enum):
     TITLE = auto()
     INSTRUCTIONS = auto()
+    READY = auto()
     ATTENTION = auto()
     CHOICES = auto()
     RESULTS = auto()
+    THANKS = auto()
     BLANK = auto()
     STOP = auto()
 
@@ -85,6 +84,9 @@ class ParticipantDisplay:
     def show_instructions(self) -> None:
         self._put(_Command.INSTRUCTIONS)
 
+    def show_ready(self) -> None:
+        self._put(_Command.READY)
+
     def show_attention(self, on: bool) -> None:
         self._put(_Command.ATTENTION, {"on": on})
 
@@ -122,6 +124,9 @@ class ParticipantDisplay:
             },
         )
 
+    def show_thanks(self) -> None:
+        self._put(_Command.THANKS)
+
     def _put(self, command: _Command, data: dict | None = None) -> None:
         self._queue.put(_Payload(command, data))
 
@@ -140,49 +145,178 @@ class ParticipantDisplay:
         container = tk.Frame(root, bg=BG)
         container.pack(fill=tk.BOTH, expand=True)
 
+        center_frame = tk.Frame(container, bg=BG)
+
         title_font = tkfont.Font(family="Helvetica", size=48, weight="bold")
+        score_font = tkfont.Font(family="Helvetica", size=28, weight="bold")
         body_font = tkfont.Font(family="Helvetica", size=22)
 
-        title_label = tk.Label(container, text="", font=title_font, bg=BG, fg=FG)
-        body_label = tk.Label(
-            container, text="", font=body_font, bg=BG, fg=FG, wraplength=900, justify=tk.CENTER
-        )
-        dot_canvas = tk.Canvas(container, width=120, height=120, bg=BG, highlightthickness=0)
-        choices_frame = tk.Frame(container, bg=BG)
-        results_label = tk.Label(
-            container, text="", font=body_font, bg=BG, fg=FG, wraplength=1000, justify=tk.CENTER
-        )
+        title_label = tk.Label(center_frame, text="", font=title_font, bg=BG, fg=FG)
+        text_stack = tk.Frame(center_frame, bg=BG)
+        dot_canvas = tk.Canvas(center_frame, width=120, height=120, bg=BG, highlightthickness=0)
+        choices_frame = tk.Frame(center_frame, bg=BG)
+
+        def clear_text_stack() -> None:
+            for child in text_stack.winfo_children():
+                child.destroy()
+
+        def show_bilingual_blocks(blocks: list[tuple[str, str]], *, font=body_font) -> None:
+            clear_text_stack()
+            for index, (de, en) in enumerate(blocks):
+                if index > 0:
+                    tk.Frame(text_stack, height=24, bg=BG).pack()
+                tk.Label(
+                    text_stack,
+                    text=de,
+                    font=font,
+                    bg=BG,
+                    fg=FG,
+                    wraplength=1200,
+                    justify=tk.CENTER,
+                ).pack(pady=(0, 12))
+                tk.Frame(text_stack, height=2, bg=FG, width=480).pack(fill=tk.X, padx=40, pady=12)
+                tk.Label(
+                    text_stack,
+                    text=en,
+                    font=font,
+                    bg=BG,
+                    fg=FG,
+                    wraplength=1200,
+                    justify=tk.CENTER,
+                ).pack(pady=(12, 0))
+
+        def show_titled_bilingual_section(
+            de_title: str,
+            de_body: str,
+            en_title: str,
+            en_body: str,
+        ) -> None:
+            clear_text_stack()
+            tk.Label(
+                text_stack,
+                text=de_title,
+                font=title_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 16))
+            tk.Label(
+                text_stack,
+                text=de_body,
+                font=body_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 12))
+            tk.Frame(text_stack, height=2, bg=FG, width=480).pack(fill=tk.X, padx=40, pady=12)
+            tk.Label(
+                text_stack,
+                text=en_title,
+                font=title_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(12, 16))
+            tk.Label(
+                text_stack,
+                text=en_body,
+                font=body_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 0))
+
+        def show_results_section(
+            de_headline: str,
+            de_body: str,
+            en_headline: str,
+            en_body: str,
+        ) -> None:
+            clear_text_stack()
+            tk.Label(
+                text_stack,
+                text=de_headline,
+                font=score_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 16))
+            tk.Label(
+                text_stack,
+                text=de_body,
+                font=body_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 12))
+            tk.Frame(text_stack, height=2, bg=FG, width=480).pack(fill=tk.X, padx=40, pady=12)
+            tk.Label(
+                text_stack,
+                text=en_headline,
+                font=score_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(12, 16))
+            tk.Label(
+                text_stack,
+                text=en_body,
+                font=body_font,
+                bg=BG,
+                fg=FG,
+                wraplength=1200,
+                justify=tk.CENTER,
+            ).pack(pady=(0, 0))
 
         def hide_all() -> None:
-            for w in (title_label, body_label, dot_canvas, choices_frame, results_label):
+            center_frame.place_forget()
+            for w in (title_label, text_stack, dot_canvas, choices_frame):
                 w.pack_forget()
+            clear_text_stack()
             for child in choices_frame.winfo_children():
                 child.destroy()
             self._photo_refs.clear()
 
+        def show_centered() -> None:
+            center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+
         def show_title_view() -> None:
             hide_all()
-            title_label.config(text="Thermal Captcha")
-            body_label.config(text="Press Enter to start", font=body_font)
-            title_label.pack(pady=(120, 20))
-            body_label.pack(pady=20)
+            title_text, body_block = title_screen_parts()
+            title_label.config(text=title_text)
+            show_bilingual_blocks([body_block])
+            show_centered()
+            title_label.pack(pady=(0, 20))
+            text_stack.pack()
             root.focus_force()
 
         def show_instructions_view() -> None:
             hide_all()
-            title_label.config(text="Instructions")
-            body_label.config(
-                text=(
-                    "When you see the green dot, pay attention to what you feel "
-                    "on your skin through the thermal stimulator.\n\n"
-                    "You will then see six drawings — click the one that looks most "
-                    "like what you just felt.\n\n"
-                    "Press Enter to continue"
-                ),
-                font=body_font,
-            )
-            title_label.pack(pady=(80, 20))
-            body_label.pack(pady=20, padx=40)
+            (de_title, de_body), (en_title, en_body) = instructions_screen_sections()
+            show_titled_bilingual_section(de_title, de_body, en_title, en_body)
+            show_centered()
+            text_stack.pack()
+            root.focus_force()
+
+        def show_ready_view() -> None:
+            hide_all()
+            show_bilingual_blocks([ready_screen_parts()])
+            show_centered()
+            text_stack.pack()
+            root.focus_force()
+
+        def show_thanks_view() -> None:
+            hide_all()
+            show_bilingual_blocks([thanks_screen_parts()])
+            show_centered()
+            text_stack.pack()
             root.focus_force()
 
         def show_attention_view(on: bool) -> None:
@@ -190,7 +324,8 @@ class ParticipantDisplay:
             dot_canvas.delete("all")
             if on:
                 dot_canvas.create_oval(10, 10, 110, 110, fill="#22c55e", outline="")
-            dot_canvas.pack(expand=True)
+            show_centered()
+            dot_canvas.pack()
 
         def show_results_view(
             score: int,
@@ -201,20 +336,16 @@ class ParticipantDisplay:
         ) -> None:
             hide_all()
             if is_first_player:
-                body_text = (
-                    f"You got {score} out of {TRIALS_PER_PERSON} correct!\n\n"
-                    "You are the first person to play the game!\n\n"
-                    "Press Enter to continue"
+                (de_headline, de_body), (en_headline, en_body) = first_player_results_sections(
+                    score
                 )
             else:
-                comparison = format_comparison_lines(score, above, same, below)
-                body_text = (
-                    f"You got {score} out of {TRIALS_PER_PERSON} correct!\n\n"
-                    + "\n".join(comparison)
-                    + "\n\nPress Enter to continue"
+                (de_headline, de_body), (en_headline, en_body) = comparison_results_sections(
+                    score, above, same, below
                 )
-            results_label.config(text=body_text, font=body_font)
-            results_label.pack(expand=True, pady=80)
+            show_results_section(de_headline, de_body, en_headline, en_body)
+            show_centered()
+            text_stack.pack()
             root.focus_force()
 
         def show_choices_view(options: list[str]) -> None:
@@ -242,7 +373,8 @@ class ParticipantDisplay:
                     highlightbackground=BTN_BG,
                 )
                 btn.grid(row=i // 3, column=i % 3, padx=16, pady=16)
-            choices_frame.pack(expand=True, pady=40)
+            show_centered()
+            choices_frame.pack()
             root.focus_force()
 
         def poll_queue() -> None:
@@ -256,6 +388,8 @@ class ParticipantDisplay:
                         show_title_view()
                     elif payload.command is _Command.INSTRUCTIONS:
                         show_instructions_view()
+                    elif payload.command is _Command.READY:
+                        show_ready_view()
                     elif payload.command is _Command.ATTENTION:
                         show_attention_view(bool(payload.data and payload.data.get("on")))
                     elif payload.command is _Command.CHOICES:
@@ -269,6 +403,8 @@ class ParticipantDisplay:
                             d["same"],
                             d["below"],
                         )
+                    elif payload.command is _Command.THANKS:
+                        show_thanks_view()
                     elif payload.command is _Command.BLANK:
                         hide_all()
             except queue.Empty:
