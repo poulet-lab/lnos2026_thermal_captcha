@@ -91,8 +91,8 @@ THERMAL CAPTCHA — CONTROL PANEL
    e.g. if they got **8/10**: *"12 people got 9 or more correct · 7 people got the same as
    you (8) · 41 people got 7 or less."*
 
-   Counts are computed over **everyone who has played so far and include the current
-   person** (so the "same" bucket is always ≥ 1).
+   Counts are computed over **other people only** (the current person is excluded).
+   If there are no other players yet, show *"You are the first person to play the game!"*
 6. Return to the main menu, ready for the next person.
 
 ### Options 2 & 3 — Rankings (shown in the terminal via `rich.Table`)
@@ -345,8 +345,11 @@ so Thermal Captcha feels like the rest of the codebase.
 - **Trial selection:** the 10 stimuli per person are sampled **at random** from the pool.
 - **Six answer images:** correct trace + 5 random traces from the whole pool.
 - **Display flow:** traces are shown **only** at the six-image choice step (no preview).
-- **Score comparison:** counts **include the current person** and span **everyone** who has
-  played so far.
+- **Score comparison:** counts **exclude the current person**; compare against everyone
+  else who has played. First player gets a dedicated message instead of buckets.
+- **Enter key:** all in-game Enter steps (start, after instructions, after results) are
+  handled on the **Tkinter display**, not the terminal.
+- **Second monitor:** borderless window placed via Win32 `SetWindowPos` (no `-fullscreen`).
 - **Family 3 decay:** fast rise at ~300 °C/s, then `return_speed = amplitude/(2 − amplitude/300)`
   (≈ amplitude/2 °C/s) so it returns to baseline at t = 2 s.
 
@@ -388,3 +391,6 @@ welcome for the deferred families — see below.)
   `tcs_controller`, `session_log`, `metadata`, `config`. 25 stimulus schematics generated.
   17 unit tests passing. Entry point: `python -m src.experiment.run`. Mock TCS enabled by
   default via `.env`.
+- **2026-06-01 (display fixes)** — Second monitor via borderless window + `SetWindowPos`;
+  Enter prompts moved to Tkinter; score comparison excludes current person; first player
+  gets special end-screen message; monitor list printed at game start.

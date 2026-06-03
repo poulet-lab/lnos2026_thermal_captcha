@@ -16,6 +16,7 @@ class Settings:
     tcs_port: str
     tcs_maximum_temperature: float
     mock_tcs: bool
+    second_monitor_index: int
     second_monitor_offset: int
 
 
@@ -25,5 +26,6 @@ def load_settings() -> Settings:
         tcs_port=os.getenv("TCS_PORT", "COM3"),
         tcs_maximum_temperature=float(os.getenv("TCS_MAXIMUM_TEMPERATURE", "45")),
         mock_tcs=_env_bool("MOCK_TCS", default=True),
+        second_monitor_index=int(os.getenv("SECOND_MONITOR_INDEX", "0")),
         second_monitor_offset=int(os.getenv("SECOND_MONITOR_OFFSET", "1920")),
     )

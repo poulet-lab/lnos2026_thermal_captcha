@@ -4,36 +4,52 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
-from .globals import TRIALS_PER_PERSON
 from .responses import load_responses
 
 
-def person_scores() -> dict[int, int]:
+def person_scores(exclude_person: int | None = None) -> dict[int, int]:
     rows = load_responses()
     scores: dict[int, int] = defaultdict(int)
     for row in rows:
+        person = int(row["person"])
+        if exclude_person is not None and person == exclude_person:
+            continue
         if row.get("correct", "").lower() == "true":
-            scores[int(row["person"])] += 1
+            scores[person] += 1
     return dict(scores)
 
 
-def score_distribution() -> Counter[int]:
-    """How many people got each score (0–TRIALS_PER_PERSON)."""
-    scores = person_scores()
-    all_people = {int(r["person"]) for r in load_responses()}
+def score_distribution(exclude_person: int | None = None) -> Counter[int]:
+    """How many people got each score (0–10), optionally excluding one person."""
+    scores = person_scores(exclude_person=exclude_person)
+    all_people = {
+        int(r["person"])
+        for r in load_responses()
+        if exclude_person is None or int(r["person"]) != exclude_person
+    }
     dist: Counter[int] = Counter()
     for person in all_people:
         dist[scores.get(person, 0)] += 1
     return dist
 
 
-def score_comparison(score: int) -> tuple[int, int, int]:
-    """Return (above, same, below) counts including current person."""
-    dist = score_distribution()
+def score_comparison(score: int, exclude_person: int) -> tuple[int, int, int]:
+    """Return (above, same, below) counts for other people only."""
+    dist = score_distribution(exclude_person=exclude_person)
     above = sum(count for s, count in dist.items() if s > score)
     same = dist.get(score, 0)
     below = sum(count for s, count in dist.items() if s < score)
     return above, same, below
+
+
+def is_first_player(exclude_person: int) -> bool:
+    """True when no other people have played besides exclude_person."""
+    others = {
+        int(r["person"])
+        for r in load_responses()
+        if int(r["person"]) != exclude_person
+    }
+    return len(others) == 0
 
 
 def stimulus_trace_ranking() -> list[tuple[str, int]]:

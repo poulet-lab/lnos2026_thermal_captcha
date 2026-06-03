@@ -3,21 +3,17 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING
 
 from rich.console import Console
-from rich.prompt import Prompt
 
 from .config import Settings, load_settings
 from .display import ParticipantDisplay
 from .globals import CHOICE_COUNT, TRIALS_PER_PERSON
-from .rankings import score_comparison
+from .monitors import format_monitors_for_log, get_monitor
+from .rankings import is_first_player, score_comparison
 from .responses import append_trial, next_person_number
 from .stimuli import STIMULUS_NAMES, STIMULUS_POOL, StimulusDefinition
 from .tcs_controller import ThermodeController
-
-if TYPE_CHECKING:
-    pass
 
 console = Console()
 
@@ -45,6 +41,14 @@ def run_game(
     settings = settings or load_settings()
     person = next_person_number()
     console.print(f"\n[bold green]Starting game for Person {person}[/bold green]")
+    console.print("[dim]Detected monitors:[/dim]")
+    for line in format_monitors_for_log():
+        console.print(f"[dim]{line}[/dim]")
+    target = get_monitor(settings.second_monitor_index, settings.second_monitor_offset)
+    console.print(
+        f"[dim]Using monitor [{settings.second_monitor_index}]: "
+        f"{target.width}x{target.height} at ({target.x}, {target.y})[/dim]"
+    )
 
     own_display = display is None
     own_thermode = thermode is None
@@ -59,9 +63,9 @@ def run_game(
     score = 0
     try:
         display.show_title()
-        Prompt.ask("\n[white]Press Enter when ready to start[/white]", default="")
+        display.wait_for_enter()
         display.show_instructions()
-        Prompt.ask("\n[white]Press Enter after reading instructions[/white]", default="")
+        display.wait_for_enter()
 
         trials = sample_trial_stimuli()
         for trial_idx, stimulus in enumerate(trials, start=1):
@@ -81,12 +85,22 @@ def run_game(
                 f"{'✓' if correct else '✗'}[/]"
             )
 
-        above, same, below = score_comparison(score)
-        display.show_results(score, above, same, below)
+        first = is_first_player(exclude_person=person)
+        if first:
+            display.show_results(score, is_first_player=True)
+        else:
+            above, same, below = score_comparison(score, exclude_person=person)
+            display.show_results(
+                score,
+                is_first_player=False,
+                above=above,
+                same=same,
+                below=below,
+            )
         console.print(
             f"\n[bold]Person {person} finished: {score}/{TRIALS_PER_PERSON} correct[/bold]"
         )
-        Prompt.ask("\n[white]Press Enter to return to menu[/white]", default="")
+        display.wait_for_enter()
         return person
     finally:
         if own_thermode:

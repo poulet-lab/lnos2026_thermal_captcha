@@ -14,6 +14,25 @@ from PIL import Image, ImageTk
 
 from .config import Settings, load_settings
 from .globals import CHOICE_COUNT, STIMULUS_TRACES_DIR, TRIALS_PER_PERSON
+from .monitors import force_window_to_monitor, get_monitor
+
+# Dark theme
+BG = "#000000"
+FG = "#FFFFFF"
+BTN_BG = "#111111"
+BTN_ACTIVE = "#222222"
+TRACE_PAD = "#1a1a1a"
+
+
+def format_comparison_lines(score: int, above: int, same: int, below: int) -> list[str]:
+    """Build social-comparison lines; omit above at perfect score, below at zero."""
+    lines: list[str] = []
+    if score < TRIALS_PER_PERSON:
+        lines.append(f"{above} people got {score + 1} or more correct")
+    lines.append(f"{same} people got the same as you ({score})")
+    if score > 0:
+        lines.append(f"{below} people got {score - 1} or less")
+    return lines
 
 
 class _Command(Enum):
@@ -40,6 +59,7 @@ class ParticipantDisplay:
         self.traces_dir = traces_dir or STIMULUS_TRACES_DIR
         self._queue: queue.Queue[_Payload] = queue.Queue()
         self._choice_event = threading.Event()
+        self._enter_event = threading.Event()
         self._chosen: str | None = None
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
@@ -68,6 +88,10 @@ class ParticipantDisplay:
     def show_attention(self, on: bool) -> None:
         self._put(_Command.ATTENTION, {"on": on})
 
+    def wait_for_enter(self) -> None:
+        self._enter_event.clear()
+        self._enter_event.wait()
+
     def show_choices(self, options: list[str]) -> str:
         if len(options) != CHOICE_COUNT:
             raise ValueError(f"Expected {CHOICE_COUNT} options, got {len(options)}")
@@ -78,10 +102,24 @@ class ParticipantDisplay:
         assert self._chosen is not None
         return self._chosen
 
-    def show_results(self, score: int, above: int, same: int, below: int) -> None:
+    def show_results(
+        self,
+        score: int,
+        *,
+        is_first_player: bool = False,
+        above: int = 0,
+        same: int = 0,
+        below: int = 0,
+    ) -> None:
         self._put(
             _Command.RESULTS,
-            {"score": score, "above": above, "same": same, "below": below},
+            {
+                "score": score,
+                "is_first_player": is_first_player,
+                "above": above,
+                "same": same,
+                "below": below,
+            },
         )
 
     def _put(self, command: _Command, data: dict | None = None) -> None:
@@ -90,24 +128,29 @@ class ParticipantDisplay:
     def _run(self) -> None:
         root = tk.Tk()
         root.title("Thermal Captcha")
-        root.configure(bg="white")
-        self._place_on_second_monitor(root)
+        root.configure(bg=BG)
+        monitor = self._place_on_second_monitor(root)
 
-        container = tk.Frame(root, bg="white")
+        def on_enter(_event=None) -> None:
+            self._enter_event.set()
+
+        root.bind("<Return>", on_enter)
+        root.bind("<KP_Enter>", on_enter)
+
+        container = tk.Frame(root, bg=BG)
         container.pack(fill=tk.BOTH, expand=True)
 
         title_font = tkfont.Font(family="Helvetica", size=48, weight="bold")
         body_font = tkfont.Font(family="Helvetica", size=22)
-        small_font = tkfont.Font(family="Helvetica", size=18)
 
-        title_label = tk.Label(container, text="", font=title_font, bg="white", fg="black")
+        title_label = tk.Label(container, text="", font=title_font, bg=BG, fg=FG)
         body_label = tk.Label(
-            container, text="", font=body_font, bg="white", fg="black", wraplength=900, justify=tk.CENTER
+            container, text="", font=body_font, bg=BG, fg=FG, wraplength=900, justify=tk.CENTER
         )
-        dot_canvas = tk.Canvas(container, width=120, height=120, bg="white", highlightthickness=0)
-        choices_frame = tk.Frame(container, bg="white")
+        dot_canvas = tk.Canvas(container, width=120, height=120, bg=BG, highlightthickness=0)
+        choices_frame = tk.Frame(container, bg=BG)
         results_label = tk.Label(
-            container, text="", font=body_font, bg="white", fg="black", wraplength=1000, justify=tk.CENTER
+            container, text="", font=body_font, bg=BG, fg=FG, wraplength=1000, justify=tk.CENTER
         )
 
         def hide_all() -> None:
@@ -120,12 +163,10 @@ class ParticipantDisplay:
         def show_title_view() -> None:
             hide_all()
             title_label.config(text="Thermal Captcha")
-            body_label.config(
-                text="Press Enter to start",
-                font=body_font,
-            )
+            body_label.config(text="Press Enter to start", font=body_font)
             title_label.pack(pady=(120, 20))
             body_label.pack(pady=20)
+            root.focus_force()
 
         def show_instructions_view() -> None:
             hide_all()
@@ -135,12 +176,14 @@ class ParticipantDisplay:
                     "When you see the green dot, pay attention to what you feel "
                     "on your skin through the thermal stimulator.\n\n"
                     "You will then see six drawings — click the one that looks most "
-                    "like what you just felt."
+                    "like what you just felt.\n\n"
+                    "Press Enter to continue"
                 ),
                 font=body_font,
             )
             title_label.pack(pady=(80, 20))
             body_label.pack(pady=20, padx=40)
+            root.focus_force()
 
         def show_attention_view(on: bool) -> None:
             hide_all()
@@ -149,27 +192,30 @@ class ParticipantDisplay:
                 dot_canvas.create_oval(10, 10, 110, 110, fill="#22c55e", outline="")
             dot_canvas.pack(expand=True)
 
-        def show_results_view(score: int, above: int, same: int, below: int) -> None:
+        def show_results_view(
+            score: int,
+            is_first_player: bool,
+            above: int,
+            same: int,
+            below: int,
+        ) -> None:
             hide_all()
-            if score < TRIALS_PER_PERSON:
-                above_line = f"{above} people got {score + 1} or more correct"
-            else:
-                above_line = f"{above} people scored higher than you"
-            same_line = f"{same} people got the same as you ({score})"
-            if score > 0:
-                below_line = f"{below} people got {score - 1} or less"
-            else:
-                below_line = f"{below} people scored lower than you"
-            results_label.config(
-                text=(
+            if is_first_player:
+                body_text = (
                     f"You got {score} out of {TRIALS_PER_PERSON} correct!\n\n"
-                    f"{above_line}\n"
-                    f"{same_line}\n"
-                    f"{below_line}"
-                ),
-                font=body_font,
-            )
+                    "You are the first person to play the game!\n\n"
+                    "Press Enter to continue"
+                )
+            else:
+                comparison = format_comparison_lines(score, above, same, below)
+                body_text = (
+                    f"You got {score} out of {TRIALS_PER_PERSON} correct!\n\n"
+                    + "\n".join(comparison)
+                    + "\n\nPress Enter to continue"
+                )
+            results_label.config(text=body_text, font=body_font)
             results_label.pack(expand=True, pady=80)
+            root.focus_force()
 
         def show_choices_view(options: list[str]) -> None:
             hide_all()
@@ -191,10 +237,13 @@ class ParticipantDisplay:
                     command=on_click,
                     bd=2,
                     relief=tk.RAISED,
-                    bg="white",
+                    bg=TRACE_PAD,
+                    activebackground=BTN_ACTIVE,
+                    highlightbackground=BTN_BG,
                 )
                 btn.grid(row=i // 3, column=i % 3, padx=16, pady=16)
             choices_frame.pack(expand=True, pady=40)
+            root.focus_force()
 
         def poll_queue() -> None:
             try:
@@ -213,25 +262,32 @@ class ParticipantDisplay:
                         show_choices_view(payload.data["options"])
                     elif payload.command is _Command.RESULTS:
                         d = payload.data
-                        show_results_view(d["score"], d["above"], d["same"], d["below"])
+                        show_results_view(
+                            d["score"],
+                            d["is_first_player"],
+                            d["above"],
+                            d["same"],
+                            d["below"],
+                        )
                     elif payload.command is _Command.BLANK:
                         hide_all()
             except queue.Empty:
                 pass
             root.after(50, poll_queue)
 
-        ready.set()
         self._ready.set()
         poll_queue()
         root.mainloop()
 
-    def _place_on_second_monitor(self, root: tk.Tk) -> None:
+    def _place_on_second_monitor(self, root: tk.Tk):
+        monitor = get_monitor(
+            self.settings.second_monitor_index,
+            fallback_offset=self.settings.second_monitor_offset,
+        )
+        root.overrideredirect(True)
+        root.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
         root.update_idletasks()
-        offset = self.settings.second_monitor_offset
-        width = root.winfo_screenwidth()
-        height = root.winfo_screenheight()
-        if offset > 0:
-            root.geometry(f"{width}x{height}+{offset}+0")
-        else:
-            root.geometry(f"{width}x{height}+0+0")
-        root.attributes("-fullscreen", True)
+        force_window_to_monitor(root.winfo_id(), monitor)
+        root.lift()
+        root.focus_force()
+        return monitor
