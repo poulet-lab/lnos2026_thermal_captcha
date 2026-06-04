@@ -22,7 +22,7 @@ INSTRUCTIONS_TITLE_DE = "Anleitung"
 INSTRUCTIONS_TITLE_EN = "Instructions"
 
 INSTRUCTIONS_BODY_DE = (
-    "Wenn Sie den grünen Punkt sehen, achten Sie auf das, was Sie auf Ihrer Haut "
+    "Während Sie den grünen Punkt sehen, achten Sie auf das, was Sie auf Ihrer Haut "
     "durch den Thermostimulator spüren.\n\n"
     "Anschließend sehen Sie sechs Zeichnungen — klicken Sie auf die, die am ehesten "
     "dem entspricht, was Sie gerade gespürt haben."
@@ -123,6 +123,10 @@ def instructions_screen_text() -> str:
 
 def ready_screen_parts() -> BilingualBlock:
     return bilingual_parts(READY_DE, READY_EN)
+
+
+def round_progress_parts(trial: int, total: int = TRIALS_PER_PERSON) -> BilingualBlock:
+    return f"Runde {trial} von {total}", f"Round {trial} of {total}"
 
 
 def ready_screen_text() -> str:

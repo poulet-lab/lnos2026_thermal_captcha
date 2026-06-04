@@ -73,16 +73,27 @@ def list_monitors() -> list[Monitor]:
     return []
 
 
-def get_monitor(index: int, fallback_offset: int = 0) -> Monitor:
+def get_monitor(
+    index: int,
+    fallback_offset: int = 0,
+    fallback_width: int = 1920,
+    fallback_height: int = 1080,
+) -> Monitor:
     """Return monitor by index (0 = leftmost). Falls back to offset-based guess."""
     monitors = list_monitors()
     if monitors and 0 <= index < len(monitors):
         return monitors[index]
 
     if fallback_offset > 0:
-        return Monitor(x=fallback_offset, y=0, width=1920, height=1080, primary=False)
+        return Monitor(
+            x=fallback_offset,
+            y=0,
+            width=fallback_width,
+            height=fallback_height,
+            primary=False,
+        )
 
-    return Monitor(x=0, y=0, width=1920, height=1080, primary=True)
+    return Monitor(x=0, y=0, width=fallback_width, height=fallback_height, primary=True)
 
 
 def force_window_to_monitor(hwnd: int, monitor: Monitor) -> None:

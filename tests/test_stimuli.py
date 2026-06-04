@@ -3,14 +3,20 @@
 import numpy as np
 import pytest
 
-from src.experiment.globals import BASELINE_TEMPERATURE, STIMULUS_DURATION_S
+from src.experiment.globals import (
+    BASELINE_TEMPERATURE,
+    FAST_RATE,
+    MIN_HOLD_MS,
+    STIMULUS_DURATION_MS,
+    STIMULUS_DURATION_S,
+)
 from src.experiment.stimuli import STIMULUS_POOL, build_stimulus_pool
 
 
 def test_pool_size():
     pool = build_stimulus_pool()
-    # flat + 3 families * 4 amplitudes * 2 directions
-    assert len(pool) == 1 + 3 * 4 * 2
+    # flat + 3 families * 6 amplitudes * 2 directions
+    assert len(pool) == 1 + 3 * 6 * 2
 
 
 def test_all_names_unique():
@@ -57,3 +63,31 @@ def test_tcs_stimulus_for_pulse():
 
 def test_flat_has_no_tcs_stimulus():
     assert STIMULUS_POOL["flat"].to_tcs_stimulus() is None
+
+
+def test_slow_up_fast_down_uses_rise_duration():
+    stim = STIMULUS_POOL["slow_up_fast_down_pos_5"]
+    tcs = stim.to_tcs_stimulus()
+    assert tcs is not None
+    assert tcs.duration == STIMULUS_DURATION_MS
+
+
+def test_fast_up_slow_down_return_starts_after_short_plateau():
+    stim = STIMULUS_POOL["fast_up_slow_down_neg_2"]
+    tcs = stim.to_tcs_stimulus()
+    assert tcs is not None
+    rise_s = stim.amplitude / FAST_RATE
+    hold_s = MIN_HOLD_MS / 1000.0
+    expected_ms = max(MIN_HOLD_MS, int(round((rise_s + hold_s) * 1000)))
+    assert tcs.duration == expected_ms
+    assert tcs.duration < STIMULUS_DURATION_MS
+
+
+def test_fast_up_slow_down_return_speed_fits_two_second_window():
+    stim = STIMULUS_POOL["fast_up_slow_down_pos_10"]
+    tcs = stim.to_tcs_stimulus()
+    assert tcs is not None
+    rise_s = stim.amplitude / FAST_RATE
+    hold_s = MIN_HOLD_MS / 1000.0
+    return_s = stim.amplitude / tcs.return_speed
+    assert rise_s + hold_s + return_s == pytest.approx(STIMULUS_DURATION_S, abs=0.01)

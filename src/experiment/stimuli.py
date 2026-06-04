@@ -89,6 +89,8 @@ class StimulusDefinition:
             )
 
         if self.family is Family.SLOW_UP_FAST_DOWN:
+            # Slow ramp to peak at t = STIMULUS_DURATION_S, then fast return.
+            # Duration is when the return phase starts (from trigger), not hold length.
             rise_rate = amp / STIMULUS_DURATION_S
             return_speed = FAST_RATE
             return TCSStimulus(
@@ -97,20 +99,24 @@ class StimulusDefinition:
                 target=target,
                 rise_rate=rise_rate,
                 return_speed=return_speed,
-                duration=MIN_HOLD_MS,
+                duration=STIMULUS_DURATION_MS,
             )
 
         if self.family is Family.FAST_UP_SLOW_DOWN:
+            # Fast rise, tiny plateau, slow return ending at t = STIMULUS_DURATION_S.
             rise_rate = FAST_RATE
             rise_s = amp / rise_rate
-            return_speed = amp / (STIMULUS_DURATION_S - rise_s)
+            hold_s = MIN_HOLD_MS / 1000.0
+            return_s = STIMULUS_DURATION_S - rise_s - hold_s
+            return_speed = amp / return_s
+            return_start_ms = max(MIN_HOLD_MS, int(round((rise_s + hold_s) * 1000)))
             return TCSStimulus(
                 surface=0,
                 baseline=baseline,
                 target=target,
                 rise_rate=rise_rate,
                 return_speed=return_speed,
-                duration=MIN_HOLD_MS,
+                duration=return_start_ms,
             )
 
         raise ValueError(f"Unknown family: {self.family}")
@@ -134,13 +140,15 @@ def _slow_up_fast_down_trace(
     amplitude: float, direction: int, n_points: int
 ) -> tuple[np.ndarray, np.ndarray]:
     rise_s = STIMULUS_DURATION_S
+    hold_s = MIN_HOLD_MS / 1000.0
     return_s = amplitude / FAST_RATE
-    total_s = rise_s + return_s
+    total_s = rise_s + hold_s + return_s
     peak = BASELINE_TEMPERATURE + direction * amplitude
 
     segments = [
         (0.0, rise_s, BASELINE_TEMPERATURE, peak),
-        (rise_s, total_s, peak, BASELINE_TEMPERATURE),
+        (rise_s, rise_s + hold_s, peak, peak),
+        (rise_s + hold_s, total_s, peak, BASELINE_TEMPERATURE),
     ]
     return _piecewise_linear(segments, n_points)
 
@@ -149,12 +157,14 @@ def _fast_up_slow_down_trace(
     amplitude: float, direction: int, n_points: int
 ) -> tuple[np.ndarray, np.ndarray]:
     rise_s = amplitude / FAST_RATE
-    return_s = STIMULUS_DURATION_S - rise_s
+    hold_s = MIN_HOLD_MS / 1000.0
+    return_s = STIMULUS_DURATION_S - rise_s - hold_s
     peak = BASELINE_TEMPERATURE + direction * amplitude
 
     segments = [
         (0.0, rise_s, BASELINE_TEMPERATURE, peak),
-        (rise_s, STIMULUS_DURATION_S, peak, BASELINE_TEMPERATURE),
+        (rise_s, rise_s + hold_s, peak, peak),
+        (rise_s + hold_s, STIMULUS_DURATION_S, peak, BASELINE_TEMPERATURE),
     ]
     return _piecewise_linear(segments, n_points)
 
@@ -184,7 +194,7 @@ def _family_delivery_duration(family: Family, amplitude: float) -> float:
         hold_s = max(0.0, STIMULUS_DURATION_S - rise_s - return_s)
         return rise_s + hold_s + return_s
     if family is Family.SLOW_UP_FAST_DOWN:
-        return STIMULUS_DURATION_S + amplitude / FAST_RATE
+        return STIMULUS_DURATION_S + MIN_HOLD_MS / 1000.0 + amplitude / FAST_RATE
     if family is Family.FAST_UP_SLOW_DOWN:
         return STIMULUS_DURATION_S
     raise ValueError(f"Unknown family: {family}")

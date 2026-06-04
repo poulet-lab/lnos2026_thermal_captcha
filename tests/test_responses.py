@@ -31,11 +31,21 @@ def test_next_person_is_per_environment(tmp_path: Path):
 
 def test_append_and_load(tmp_path: Path):
     path = tmp_path / "responses.csv"
-    append_trial(1, 1, "flat", "flat", True, path=path, environment=ENVIRONMENT_MOCK_TCS)
+    append_trial(
+        1,
+        1,
+        "flat",
+        "flat",
+        True,
+        path=path,
+        environment=ENVIRONMENT_MOCK_TCS,
+        difficulty="easy",
+    )
     rows = load_responses(path)
     assert len(rows) == 1
     assert rows[0]["person"] == "1"
     assert rows[0]["environment"] == ENVIRONMENT_MOCK_TCS
+    assert rows[0]["difficulty"] == "easy"
     assert rows[0]["correct"] == "true"
 
 
@@ -62,4 +72,49 @@ def test_migrate_legacy_csv_without_environment(tmp_path: Path):
     rows = load_responses(path, environment=ENVIRONMENT_MOCK_TCS)
     assert len(rows) == 2
     assert all(row["environment"] == ENVIRONMENT_MOCK_TCS for row in rows)
+    assert all(row["difficulty"] == "" for row in rows)
     assert next_person_number(path, environment=ENVIRONMENT_MOCK_TCS) == 7
+
+
+def test_migrate_csv_adds_difficulty_column(tmp_path: Path):
+    path = tmp_path / "responses.csv"
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=(
+                "timestamp",
+                "environment",
+                "person",
+                "trial",
+                "stimulus_type",
+                "chosen",
+                "correct",
+            ),
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "timestamp": "2026-06-03T12:00:00",
+                "environment": ENVIRONMENT_MOCK_TCS,
+                "person": 1,
+                "trial": 1,
+                "stimulus_type": "flat",
+                "chosen": "flat",
+                "correct": "true",
+            }
+        )
+
+    append_trial(
+        2,
+        1,
+        "flat",
+        "flat",
+        True,
+        path=path,
+        environment=ENVIRONMENT_MOCK_TCS,
+        difficulty="hard",
+    )
+    rows = load_responses(path, environment=ENVIRONMENT_MOCK_TCS)
+    assert len(rows) == 2
+    assert rows[0]["difficulty"] == ""
+    assert rows[1]["difficulty"] == "hard"

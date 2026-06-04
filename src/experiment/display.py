@@ -12,13 +12,23 @@ from tkinter import font as tkfont
 
 from PIL import Image, ImageTk
 
-from .globals import CHOICE_COUNT, SECOND_MONITOR_INDEX, SECOND_MONITOR_OFFSET, STIMULUS_TRACES_DIR
+from .globals import (
+    CHOICE_COUNT,
+    ROUND_PROGRESS_PAUSE_S,
+    SECOND_MONITOR_HEIGHT,
+    SECOND_MONITOR_INDEX,
+    SECOND_MONITOR_OFFSET,
+    SECOND_MONITOR_WIDTH,
+    STIMULUS_TRACES_DIR,
+    TRIALS_PER_PERSON,
+)
 from .monitors import force_window_to_monitor, get_monitor
 from .ui_strings import (
     comparison_results_sections,
     first_player_results_sections,
     instructions_screen_sections,
     ready_screen_parts,
+    round_progress_parts,
     thanks_screen_parts,
     title_screen_parts,
 )
@@ -36,6 +46,7 @@ class _Command(Enum):
     INSTRUCTIONS = auto()
     READY = auto()
     ATTENTION = auto()
+    ROUND_PROGRESS = auto()
     CHOICES = auto()
     RESULTS = auto()
     THANKS = auto()
@@ -57,6 +68,7 @@ class ParticipantDisplay:
         self._queue: queue.Queue[_Payload] = queue.Queue()
         self._choice_event = threading.Event()
         self._enter_event = threading.Event()
+        self._round_progress_event = threading.Event()
         self._chosen: str | None = None
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
@@ -65,6 +77,7 @@ class ParticipantDisplay:
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
             return
+        self._thread = None
         self._ready.clear()
         self._thread = threading.Thread(target=self._run, name="participant-display", daemon=True)
         self._thread.start()
@@ -72,9 +85,12 @@ class ParticipantDisplay:
             raise RuntimeError("Participant display failed to start")
 
     def stop(self) -> None:
+        if self._thread is None or not self._thread.is_alive():
+            self._thread = None
+            return
         self._queue.put(_Payload(_Command.STOP))
-        if self._thread is not None:
-            self._thread.join(timeout=5)
+        self._thread.join(timeout=5)
+        self._thread = None
 
     def show_title(self) -> None:
         self._put(_Command.TITLE)
@@ -87,6 +103,11 @@ class ParticipantDisplay:
 
     def show_attention(self, on: bool) -> None:
         self._put(_Command.ATTENTION, {"on": on})
+
+    def show_round_progress(self, trial: int, total: int = TRIALS_PER_PERSON) -> None:
+        self._round_progress_event.clear()
+        self._put(_Command.ROUND_PROGRESS, {"trial": trial, "total": total})
+        self._round_progress_event.wait()
 
     def wait_for_enter(self) -> None:
         self._enter_event.clear()
@@ -145,9 +166,9 @@ class ParticipantDisplay:
 
         center_frame = tk.Frame(container, bg=BG)
 
-        title_font = tkfont.Font(family="Helvetica", size=48, weight="bold")
-        score_font = tkfont.Font(family="Helvetica", size=28, weight="bold")
-        body_font = tkfont.Font(family="Helvetica", size=22)
+        title_font = tkfont.Font(root=root, family="Helvetica", size=48, weight="bold")
+        score_font = tkfont.Font(root=root, family="Helvetica", size=28, weight="bold")
+        body_font = tkfont.Font(root=root, family="Helvetica", size=22)
 
         title_label = tk.Label(center_frame, text="", font=title_font, bg=BG, fg=FG)
         text_stack = tk.Frame(center_frame, bg=BG)
@@ -325,6 +346,21 @@ class ParticipantDisplay:
             show_centered()
             dot_canvas.pack()
 
+        def show_round_progress_view(trial: int, total: int) -> None:
+            hide_all()
+            show_bilingual_blocks([round_progress_parts(trial, total)], font=score_font)
+            show_centered()
+            text_stack.pack()
+            root.focus_force()
+            if round_progress_after_id[0] is not None:
+                root.after_cancel(round_progress_after_id[0])
+            pause_ms = int(ROUND_PROGRESS_PAUSE_S * 1000)
+            round_progress_after_id[0] = root.after(
+                pause_ms, self._round_progress_event.set
+            )
+
+        round_progress_after_id: list[str | None] = [None]
+
         def show_results_view(
             score: int,
             is_first_player: bool,
@@ -390,6 +426,9 @@ class ParticipantDisplay:
                         show_ready_view()
                     elif payload.command is _Command.ATTENTION:
                         show_attention_view(bool(payload.data and payload.data.get("on")))
+                    elif payload.command is _Command.ROUND_PROGRESS:
+                        d = payload.data
+                        show_round_progress_view(d["trial"], d["total"])
                     elif payload.command is _Command.CHOICES:
                         show_choices_view(payload.data["options"])
                     elif payload.command is _Command.RESULTS:
@@ -412,11 +451,17 @@ class ParticipantDisplay:
         self._ready.set()
         poll_queue()
         root.mainloop()
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
 
     def _place_on_second_monitor(self, root: tk.Tk):
         monitor = get_monitor(
             SECOND_MONITOR_INDEX,
             fallback_offset=SECOND_MONITOR_OFFSET,
+            fallback_width=SECOND_MONITOR_WIDTH,
+            fallback_height=SECOND_MONITOR_HEIGHT,
         )
         root.overrideredirect(True)
         root.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")

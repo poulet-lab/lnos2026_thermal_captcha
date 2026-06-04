@@ -8,6 +8,7 @@ from src.experiment.ui_strings import (
     format_comparison_bilingual,
     instructions_screen_text,
     ready_screen_text,
+    round_progress_parts,
     thanks_screen_text,
     title_screen_text,
 )
@@ -30,7 +31,7 @@ def test_title_screen_is_bilingual():
 
 def test_instructions_screen_layout():
     text = instructions_screen_text()
-    assert text.index("Anleitung") < text.index("grünen Punkt")
+    assert text.index("Anleitung") < text.index("Während Sie den grünen Punkt")
     assert text.index("Drücken Sie Enter zum Fortfahren") < text.index(BILINGUAL_SEPARATOR_MARKER)
     assert text.index(BILINGUAL_SEPARATOR_MARKER) < text.index("Instructions")
     assert text.index("Instructions") < text.index("green dot")
@@ -44,6 +45,15 @@ def test_ready_screen_bilingual():
     assert "Are you ready to play Thermal Captcha" in text
     assert text.index("Sind Sie bereit") < text.index(BILINGUAL_SEPARATOR_MARKER)
     assert text.index(BILINGUAL_SEPARATOR_MARKER) < text.index("Are you ready")
+
+
+def test_round_progress_parts():
+    de, en = round_progress_parts(3, 10)
+    assert de == "Runde 3 von 10"
+    assert en == "Round 3 of 10"
+    text = bilingual(de, en)
+    assert text.index("Runde 3 von 10") < text.index(BILINGUAL_SEPARATOR_MARKER)
+    assert text.index(BILINGUAL_SEPARATOR_MARKER) < text.index("Round 3 of 10")
 
 
 def test_thanks_screen_bilingual():

@@ -4,20 +4,29 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from .difficulty import Difficulty
 from .globals import current_environment
 from .responses import load_responses
 
 
-def _rows_for_environment(environment: str | None = None) -> list[dict[str, str]]:
-    return load_responses(environment=environment or current_environment())
+def _rows_for_session(
+    environment: str | None = None,
+    difficulty: Difficulty | None = None,
+) -> list[dict[str, str]]:
+    rows = load_responses(environment=environment or current_environment())
+    if difficulty is not None:
+        difficulty_value = difficulty.value
+        rows = [row for row in rows if row.get("difficulty") == difficulty_value]
+    return rows
 
 
 def person_scores(
     exclude_person: int | None = None,
     *,
     environment: str | None = None,
+    difficulty: Difficulty | None = None,
 ) -> dict[int, int]:
-    rows = _rows_for_environment(environment)
+    rows = _rows_for_session(environment, difficulty)
     scores: dict[int, int] = defaultdict(int)
     for row in rows:
         person = int(row["person"])
@@ -32,13 +41,18 @@ def score_distribution(
     exclude_person: int | None = None,
     *,
     environment: str | None = None,
+    difficulty: Difficulty | None = None,
 ) -> Counter[int]:
     """How many people got each score (0–10), optionally excluding one person."""
     env = environment or current_environment()
-    scores = person_scores(exclude_person=exclude_person, environment=env)
+    scores = person_scores(
+        exclude_person=exclude_person,
+        environment=env,
+        difficulty=difficulty,
+    )
     all_people = {
         int(r["person"])
-        for r in _rows_for_environment(env)
+        for r in _rows_for_session(env, difficulty)
         if exclude_person is None or int(r["person"]) != exclude_person
     }
     dist: Counter[int] = Counter()
@@ -52,9 +66,14 @@ def score_comparison(
     exclude_person: int,
     *,
     environment: str | None = None,
+    difficulty: Difficulty | None = None,
 ) -> tuple[int, int, int]:
     """Return (above, same, below) counts for other people in the same environment."""
-    dist = score_distribution(exclude_person=exclude_person, environment=environment)
+    dist = score_distribution(
+        exclude_person=exclude_person,
+        environment=environment,
+        difficulty=difficulty,
+    )
     above = sum(count for s, count in dist.items() if s > score)
     same = dist.get(score, 0)
     below = sum(count for s, count in dist.items() if s < score)
@@ -65,12 +84,13 @@ def is_first_player(
     exclude_person: int,
     *,
     environment: str | None = None,
+    difficulty: Difficulty | None = None,
 ) -> bool:
-    """True when no other people have played in this environment besides exclude_person."""
+    """True when no other people have played at this difficulty besides exclude_person."""
     env = environment or current_environment()
     others = {
         int(r["person"])
-        for r in _rows_for_environment(env)
+        for r in _rows_for_session(env, difficulty)
         if int(r["person"]) != exclude_person
     }
     return len(others) == 0
@@ -78,7 +98,7 @@ def is_first_player(
 
 def stimulus_trace_ranking(*, environment: str | None = None) -> list[tuple[str, int]]:
     """Raw count of correct identifications per stimulus name in the current environment."""
-    rows = _rows_for_environment(environment)
+    rows = _rows_for_session(environment)
     counts: Counter[str] = Counter()
     for row in rows:
         if row.get("correct", "").lower() == "true":

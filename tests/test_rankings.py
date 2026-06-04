@@ -89,3 +89,50 @@ def test_rankings_ignore_other_environments(tmp_path, monkeypatch):
     dist = score_distribution(environment=ENVIRONMENT_LNOS)
     assert dist[3] == 1
     assert score_distribution(environment=ENVIRONMENT_MOCK_TCS)[8] == 1
+
+
+def test_rankings_filter_by_difficulty(tmp_path, monkeypatch):
+    from src.experiment import responses as resp_mod
+    from src.experiment.difficulty import Difficulty
+
+    path = tmp_path / "responses.csv"
+    monkeypatch.setattr(resp_mod, "RESPONSES_CSV", path)
+
+    for trial in range(1, 11):
+        append_trial(
+            1,
+            trial,
+            "flat",
+            "flat",
+            trial <= 8,
+            path=path,
+            difficulty="easy",
+        )
+    for trial in range(1, 11):
+        append_trial(
+            2,
+            trial,
+            "flat",
+            "flat",
+            trial <= 6,
+            path=path,
+            difficulty="hard",
+        )
+
+    above, same, below = score_comparison(
+        8,
+        exclude_person=1,
+        difficulty=Difficulty.EASY,
+    )
+    assert same == 0
+    assert above == 0
+    assert below == 0
+    assert is_first_player(exclude_person=1, difficulty=Difficulty.EASY) is True
+
+    above, same, below = score_comparison(
+        6,
+        exclude_person=2,
+        difficulty=Difficulty.HARD,
+    )
+    assert same == 0
+    assert is_first_player(exclude_person=2, difficulty=Difficulty.HARD) is True

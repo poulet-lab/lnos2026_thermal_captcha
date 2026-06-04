@@ -11,6 +11,7 @@ from .globals import DATA_RAW, ENVIRONMENT_MOCK_TCS, RESPONSES_CSV, current_envi
 FIELDNAMES = (
     "timestamp",
     "environment",
+    "difficulty",
     "person",
     "trial",
     "stimulus_type",
@@ -22,6 +23,8 @@ FIELDNAMES = (
 def _normalize_row(row: dict[str, str]) -> dict[str, str]:
     if not row.get("environment"):
         row["environment"] = ENVIRONMENT_MOCK_TCS
+    if "difficulty" not in row:
+        row["difficulty"] = ""
     return row
 
 
@@ -30,13 +33,18 @@ def _migrate_responses_file(path: Path) -> None:
         return
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        if not reader.fieldnames or "environment" in reader.fieldnames:
-            return
-        rows = [_normalize_row(dict(row)) for row in reader]
+        old_fieldnames = list(reader.fieldnames or [])
+        rows = [dict(row) for row in reader]
+
+    if old_fieldnames == list(FIELDNAMES):
+        return
+
+    normalized = [_normalize_row(row) for row in rows]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
         writer.writeheader()
-        writer.writerows(rows)
+        for row in normalized:
+            writer.writerow({field: row.get(field, "") for field in FIELDNAMES})
 
 
 def _ensure_responses_file(path: Path = RESPONSES_CSV) -> None:
@@ -78,6 +86,7 @@ def append_trial(
     path: Path | None = None,
     *,
     environment: str | None = None,
+    difficulty: str = "",
 ) -> None:
     path = path or RESPONSES_CSV
     environment = environment or current_environment()
@@ -88,6 +97,7 @@ def append_trial(
             {
                 "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 "environment": environment,
+                "difficulty": difficulty,
                 "person": person,
                 "trial": trial,
                 "stimulus_type": stimulus_type,
