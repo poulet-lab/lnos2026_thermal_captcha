@@ -75,6 +75,7 @@ class ParticipantDisplay:
         self._ready = threading.Event()
         self._photo_refs: list[ImageTk.PhotoImage] = []
         self._advance_enabled = False
+        self._queue_wake = None
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -90,7 +91,7 @@ class ParticipantDisplay:
         if self._thread is None or not self._thread.is_alive():
             self._thread = None
             return
-        self._queue.put(_Payload(_Command.STOP))
+        self._put(_Command.STOP)
         self._thread.join(timeout=5)
         self._thread = None
 
@@ -178,11 +179,11 @@ class ParticipantDisplay:
 
     def _put(self, command: _Command, data: dict | None = None) -> None:
         self._queue.put(_Payload(command, data))
-        root = getattr(self, "_root", None)
-        if root is not None:
+        wake = self._queue_wake
+        if wake is not None:
             try:
-                root.after(0, lambda: None)
-            except tk.TclError:
+                wake()
+            except (RuntimeError, tk.TclError):
                 pass
 
     def _run(self) -> None:
@@ -453,7 +454,10 @@ class ParticipantDisplay:
             choices_frame.pack()
             root.focus_force()
 
-        def poll_queue() -> None:
+        queue_wake_pending = [False]
+
+        def poll_queue(*, schedule_next: bool = True) -> None:
+            queue_wake_pending[0] = False
             try:
                 while True:
                     payload = self._queue.get_nowait()
@@ -488,7 +492,16 @@ class ParticipantDisplay:
                         hide_all()
             except queue.Empty:
                 pass
-            root.after(50, poll_queue)
+            if schedule_next:
+                root.after(50, poll_queue)
+
+        def wake_queue() -> None:
+            if queue_wake_pending[0]:
+                return
+            queue_wake_pending[0] = True
+            root.after(0, lambda: poll_queue(schedule_next=False))
+
+        self._queue_wake = wake_queue
 
         self._ready.set()
         poll_queue()
@@ -497,6 +510,7 @@ class ParticipantDisplay:
             root.destroy()
         except tk.TclError:
             pass
+        self._queue_wake = None
         self._root = None
 
     def _place_on_second_monitor(self, root: tk.Tk):

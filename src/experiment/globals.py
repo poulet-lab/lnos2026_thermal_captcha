@@ -39,10 +39,10 @@ TCS_PORT = "COM10"
 TCS_MAXIMUM_TEMPERATURE = 45.0
 
 # True = no hardware (testing / development); False = real thermode
-MOCK_TCS = False
+MOCK_TCS = True
 
 # True = real hardware test runs (ranked separately from LNOS event data)
-TROUBLESHOOTING = True
+TROUBLESHOOTING = False
 
 # Which monitor shows the participant UI (0 = leftmost in Windows display order)
 SECOND_MONITOR_INDEX = 1
