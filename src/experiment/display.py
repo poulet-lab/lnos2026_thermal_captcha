@@ -69,6 +69,7 @@ class ParticipantDisplay:
         self._choice_event = threading.Event()
         self._enter_event = threading.Event()
         self._round_progress_event = threading.Event()
+        self._round_progress_ready = threading.Event()
         self._chosen: str | None = None
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
@@ -107,8 +108,20 @@ class ParticipantDisplay:
 
     def show_round_progress(self, trial: int, total: int = TRIALS_PER_PERSON) -> None:
         self._round_progress_event.clear()
+        self._round_progress_ready.clear()
+        self._put(_Command.BLANK)
         self._put(_Command.ROUND_PROGRESS, {"trial": trial, "total": total})
+        self._round_progress_ready.wait()
         self._round_progress_event.wait()
+
+    def show_blank(self) -> None:
+        self._put(_Command.BLANK)
+
+    def is_continue_signaled(self) -> bool:
+        return self._enter_event.is_set()
+
+    def clear_continue(self) -> None:
+        self._enter_event.clear()
 
     def enable_continue(self) -> None:
         self._advance_enabled = True
@@ -121,6 +134,9 @@ class ParticipantDisplay:
 
     def wait_for_continue(self) -> None:
         self._enter_event.clear()
+        self._enter_event.wait()
+
+    def wait_for_continue_signal(self) -> None:
         self._enter_event.wait()
 
     def wait_for_enter(self) -> None:
@@ -162,9 +178,16 @@ class ParticipantDisplay:
 
     def _put(self, command: _Command, data: dict | None = None) -> None:
         self._queue.put(_Payload(command, data))
+        root = getattr(self, "_root", None)
+        if root is not None:
+            try:
+                root.after(0, lambda: None)
+            except tk.TclError:
+                pass
 
     def _run(self) -> None:
         root = tk.Tk()
+        self._root = root
         root.title("Thermal Captcha")
         root.configure(bg=BG)
         monitor = self._place_on_second_monitor(root)
@@ -368,9 +391,11 @@ class ParticipantDisplay:
             show_bilingual_blocks([round_progress_parts(trial, total)], font=score_font)
             show_centered()
             text_stack.pack()
+            root.update_idletasks()
             root.focus_force()
             if round_progress_after_id[0] is not None:
                 root.after_cancel(round_progress_after_id[0])
+            self._round_progress_ready.set()
             pause_ms = int(ROUND_PROGRESS_PAUSE_S * 1000)
             round_progress_after_id[0] = root.after(
                 pause_ms, self._round_progress_event.set
@@ -472,6 +497,7 @@ class ParticipantDisplay:
             root.destroy()
         except tk.TclError:
             pass
+        self._root = None
 
     def _place_on_second_monitor(self, root: tk.Tk):
         monitor = get_monitor(

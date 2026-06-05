@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import random
+import sys
 import threading
+import time
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt
 
 from .difficulty import Difficulty, allowed_amplitudes, stimulus_names_for_difficulty
 from .display import ParticipantDisplay
@@ -31,19 +32,45 @@ console = Console()
 
 def wait_for_operator_continue(display: ParticipantDisplay) -> None:
     """Wait for Enter in the operator terminal or a click on the participant screen."""
+    done = threading.Event()
+    display.clear_continue()
     display.enable_continue()
 
     def read_terminal() -> None:
-        Prompt.ask(
-            "[dim]Press Enter here to continue (or click the participant screen)[/dim]",
-            default="",
+        console.print(
+            "[dim]Press Enter here to continue (or click the participant screen)[/dim]"
         )
-        display.signal_continue()
+        if sys.platform == "win32":
+            import msvcrt
+
+            while not done.is_set():
+                if display.is_continue_signaled():
+                    return
+                if msvcrt.kbhit():
+                    key = msvcrt.getwch()
+                    if key in ("\r", "\n"):
+                        display.signal_continue()
+                        return
+                time.sleep(0.05)
+            return
+
+        import select
+
+        while not done.is_set():
+            if display.is_continue_signaled():
+                return
+            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if ready:
+                sys.stdin.readline()
+                display.signal_continue()
+                return
 
     terminal_thread = threading.Thread(target=read_terminal, daemon=True)
     terminal_thread.start()
-    display.wait_for_continue()
+    display.wait_for_continue_signal()
+    done.set()
     display.disable_continue()
+    display.clear_continue()
 
 
 def sample_trial_stimuli(
@@ -180,6 +207,8 @@ def run_game(
         wait_for_operator_continue(display)
         display.show_thanks()
         wait_for_operator_continue(display)
+        display.show_blank()
+        console.print("[dim]Ready for the next participant — back at the control menu.[/dim]")
         return person
     finally:
         if own_thermode:
