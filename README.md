@@ -246,6 +246,43 @@ When you exit the menu (**0**), the terminal shows a yellow reminder:
 
 ---
 
+## Desktop shortcut (Linux / Ubuntu)
+
+Same idea as Windows: a **Desktop icon** that opens the operator menu in a terminal.
+
+### 1. Launcher script
+
+This repo includes `scripts/run_thermal_captcha.sh`. Make it executable once:
+
+```bash
+chmod +x /path/to/lnos2026_thermal_captcha/scripts/run_thermal_captcha.sh
+```
+
+It activates the micromamba environment, updates the repo, and runs the game (same steps as the Windows `.ps1` launcher).
+
+### 2. Create the shortcut
+
+1. Copy `scripts/thermal-captcha.desktop.example` to `~/Desktop/Thermal-Captcha.desktop`.
+2. Edit the `Exec=` line and replace `/ABS/PATH/TO/lnos2026_thermal_captcha` with your clone path.
+3. Make it executable:
+
+```bash
+chmod +x ~/Desktop/Thermal-Captcha.desktop
+```
+
+4. On Ubuntu 22.04+, right-click the icon → **Allow Launching** (or **Trust and Launch**).
+
+Optional: copy the same file to `~/.local/share/applications/` and run `update-desktop-database ~/.local/share/applications` to show it in the app menu.
+
+The trailing `read -p` in the example keeps the terminal open after exit so you can read errors or the yellow restart reminder.
+
+### Linux notes
+
+- Set `TCS_PORT` in `globals.py` to your device (e.g. `/dev/ttyUSB0`, check with `ls /dev/ttyUSB*`).
+- Install `xrandr` for multi-monitor detection: `sudo apt install x11-xserver-utils`.
+
+---
+
 ## 6. Real hardware (event day)
 
 1. Connect the QST thermode and note the serial port (`COM3` on Windows, etc.).
@@ -317,7 +354,10 @@ lnos2026_thermal_captcha/
 ├── tests/                # pytest suite
 ├── environment.yml       # micromamba / conda env
 ├── requirements.txt      # pip dependencies
-└── scripts/run_thermal_captcha.ps1   # Windows Desktop shortcut launcher
+└── scripts/
+    ├── run_thermal_captcha.ps1           # Windows Desktop shortcut launcher
+    ├── run_thermal_captcha.sh            # Linux Desktop shortcut launcher
+    └── thermal-captcha.desktop.example   # Ubuntu .desktop template
 ```
 
 More detail: [`src/experiment/README.md`](src/experiment/README.md).
