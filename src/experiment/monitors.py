@@ -1,7 +1,9 @@
-"""Detect monitor geometry (Windows)."""
+"""Detect monitor geometry (Windows and Linux/X11)."""
 
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
 from dataclasses import dataclass
 
@@ -67,9 +69,78 @@ def _enum_monitors_windows() -> list[Monitor]:
     return monitors
 
 
+_GEOMETRY_RE = re.compile(r"(\d+)(?:/\d+)?x(\d+)(?:/\d+)?\+(-?\d+)\+(-?\d+)")
+
+
+def parse_xrandr_listmonitors(text: str) -> list[Monitor]:
+    """Parse `xrandr --listmonitors` output."""
+    monitors: list[Monitor] = []
+    for line in text.splitlines():
+        match = _GEOMETRY_RE.search(line)
+        if not match:
+            continue
+        width, height, x, y = (int(value) for value in match.groups())
+        flags = line.split(":", 1)[1] if ":" in line else line
+        primary = "*" in flags
+        monitors.append(
+            Monitor(x=x, y=y, width=width, height=height, primary=primary)
+        )
+    monitors.sort(key=lambda m: (m.x, m.y))
+    return monitors
+
+
+def parse_xrandr_query(text: str) -> list[Monitor]:
+    """Parse `xrandr --query` connected-output lines."""
+    monitors: list[Monitor] = []
+    for line in text.splitlines():
+        if " connected" not in line:
+            continue
+        match = _GEOMETRY_RE.search(line)
+        if not match:
+            continue
+        width, height, x, y = (int(value) for value in match.groups())
+        primary = " primary" in line
+        monitors.append(
+            Monitor(x=x, y=y, width=width, height=height, primary=primary)
+        )
+    monitors.sort(key=lambda m: (m.x, m.y))
+    return monitors
+
+
+def _run_xrandr(*args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["xrandr", *args],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _enum_monitors_linux() -> list[Monitor]:
+    listmonitors = _run_xrandr("--listmonitors")
+    if listmonitors:
+        monitors = parse_xrandr_listmonitors(listmonitors)
+        if monitors:
+            return monitors
+
+    query = _run_xrandr("--query")
+    if query:
+        return parse_xrandr_query(query)
+    return []
+
+
 def list_monitors() -> list[Monitor]:
     if sys.platform == "win32":
         return _enum_monitors_windows()
+    if sys.platform.startswith("linux"):
+        return _enum_monitors_linux()
     return []
 
 
@@ -119,7 +190,8 @@ def format_monitors_for_log() -> list[str]:
     """Return human-readable lines describing detected monitors."""
     monitors = list_monitors()
     if not monitors:
-        return ["No monitors detected (using fallback offset)."]
+        hint = "install xrandr" if sys.platform.startswith("linux") else "check display drivers"
+        return [f"No monitors detected (using fallback offset; {hint})."]
     lines = []
     for i, m in enumerate(monitors):
         primary = " primary" if m.primary else ""

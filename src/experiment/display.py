@@ -73,6 +73,7 @@ class ParticipantDisplay:
         self._thread: threading.Thread | None = None
         self._ready = threading.Event()
         self._photo_refs: list[ImageTk.PhotoImage] = []
+        self._advance_enabled = False
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -109,9 +110,22 @@ class ParticipantDisplay:
         self._put(_Command.ROUND_PROGRESS, {"trial": trial, "total": total})
         self._round_progress_event.wait()
 
-    def wait_for_enter(self) -> None:
+    def enable_continue(self) -> None:
+        self._advance_enabled = True
+
+    def disable_continue(self) -> None:
+        self._advance_enabled = False
+
+    def signal_continue(self) -> None:
+        self._enter_event.set()
+
+    def wait_for_continue(self) -> None:
         self._enter_event.clear()
         self._enter_event.wait()
+
+    def wait_for_enter(self) -> None:
+        """Backward-compatible alias for wait_for_continue()."""
+        self.wait_for_continue()
 
     def show_choices(self, options: list[str]) -> str:
         if len(options) != CHOICE_COUNT:
@@ -155,11 +169,14 @@ class ParticipantDisplay:
         root.configure(bg=BG)
         monitor = self._place_on_second_monitor(root)
 
-        def on_enter(_event=None) -> None:
-            self._enter_event.set()
+        def on_advance(_event=None) -> None:
+            if self._advance_enabled:
+                root.focus_force()
+                self._enter_event.set()
 
-        root.bind("<Return>", on_enter)
-        root.bind("<KP_Enter>", on_enter)
+        root.bind("<Return>", on_advance)
+        root.bind("<KP_Enter>", on_advance)
+        root.bind("<Button-1>", on_advance)
 
         container = tk.Frame(root, bg=BG)
         container.pack(fill=tk.BOTH, expand=True)

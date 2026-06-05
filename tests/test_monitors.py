@@ -2,7 +2,12 @@
 
 import sys
 
-from src.experiment.monitors import get_monitor, list_monitors
+from src.experiment.monitors import (
+    get_monitor,
+    list_monitors,
+    parse_xrandr_listmonitors,
+    parse_xrandr_query,
+)
 
 
 def test_get_monitor_fallback():
@@ -16,4 +21,42 @@ def test_list_monitors_on_windows():
         return
     monitors = list_monitors()
     assert len(monitors) >= 1
+    assert all(m.width > 0 and m.height > 0 for m in monitors)
+
+
+def test_parse_xrandr_listmonitors():
+    text = """
+Monitors: 2
+ 0: +*eDP-1 1920/344x1080/193+0+0  eDP-1
+ 1: +HDMI-1 1920/508x1080/286+1920+0  HDMI-1
+""".strip()
+    monitors = parse_xrandr_listmonitors(text)
+    assert len(monitors) == 2
+    assert monitors[0].width == 1920
+    assert monitors[0].height == 1080
+    assert monitors[0].x == 0
+    assert monitors[0].primary is True
+    assert monitors[1].x == 1920
+    assert monitors[1].primary is False
+
+
+def test_parse_xrandr_query():
+    text = """
+Screen 0: minimum 320 x 200, current 3840 x 1080 maximum 16384 x 16384
+HDMI-1 connected primary 1920x1080+0+0 (normal left inverted right x axis y axis) *0
+DP-1 connected 1920x1080+1920+0 (normal left inverted right x axis y axis) 0
+DP-2 disconnected (normal left inverted right x axis y axis)
+""".strip()
+    monitors = parse_xrandr_query(text)
+    assert len(monitors) == 2
+    assert monitors[0].primary is True
+    assert monitors[1].x == 1920
+
+
+def test_list_monitors_on_linux_when_xrandr_available():
+    if not sys.platform.startswith("linux"):
+        return
+    monitors = list_monitors()
+    if not monitors:
+        return
     assert all(m.width > 0 and m.height > 0 for m in monitors)

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import random
+import threading
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Prompt
 
 from .difficulty import Difficulty, allowed_amplitudes, stimulus_names_for_difficulty
 from .display import ParticipantDisplay
@@ -25,6 +27,23 @@ from .stimuli import STIMULUS_POOL, StimulusDefinition
 from .tcs_controller import ThermodeController
 
 console = Console()
+
+
+def wait_for_operator_continue(display: ParticipantDisplay) -> None:
+    """Wait for Enter in the operator terminal or a click on the participant screen."""
+    display.enable_continue()
+
+    def read_terminal() -> None:
+        Prompt.ask(
+            "[dim]Press Enter here to continue (or click the participant screen)[/dim]",
+            default="",
+        )
+        display.signal_continue()
+
+    terminal_thread = threading.Thread(target=read_terminal, daemon=True)
+    terminal_thread.start()
+    display.wait_for_continue()
+    display.disable_continue()
 
 
 def sample_trial_stimuli(
@@ -74,7 +93,8 @@ def run_game(
     console.print()
     console.print(
         Panel(
-            "[bold yellow]Click once on the other screen to show the screen of the Thermal Captcha game[/bold yellow]",
+            "[bold yellow]Press Enter in this terminal to advance each screen, "
+            "or click once on the participant screen.[/bold yellow]",
             border_style="yellow",
             padding=(1, 2),
         )
@@ -94,11 +114,11 @@ def run_game(
     score = 0
     try:
         display.show_title()
-        display.wait_for_enter()
+        wait_for_operator_continue(display)
         display.show_instructions()
-        display.wait_for_enter()
+        wait_for_operator_continue(display)
         display.show_ready()
-        display.wait_for_enter()
+        wait_for_operator_continue(display)
 
         trials = sample_trial_stimuli(difficulty)
         for trial_idx, stimulus in enumerate(trials, start=1):
@@ -157,9 +177,9 @@ def run_game(
         console.print(
             f"\n[bold]Person {person} finished: {score}/{TRIALS_PER_PERSON} correct[/bold]"
         )
-        display.wait_for_enter()
+        wait_for_operator_continue(display)
         display.show_thanks()
-        display.wait_for_enter()
+        wait_for_operator_continue(display)
         return person
     finally:
         if own_thermode:
