@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=Thermal Captcha
 Comment=LNOS thermal perception game operator menu
-Exec=gnome-terminal --title="Thermal Captcha" -- bash -lc '/ABS/PATH/TO/lnos2026_thermal_captcha/scripts/run_thermal_captcha.sh; echo; read -p "Press Enter to close..."'
+Exec=gnome-terminal --title="Thermal Captcha" -- bash -lc 'export MAMBA_ROOT_PREFIX="${MAMBA_ROOT_PREFIX:-$HOME/micromamba}"; /ABS/PATH/TO/lnos2026_thermal_captcha/scripts/run_thermal_captcha.sh; echo; read -p "Press Enter to close..."'
 Icon=utilities-terminal
 Terminal=false
 Categories=Science;Education;

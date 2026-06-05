@@ -280,6 +280,7 @@ The trailing `read -p` in the example keeps the terminal open after exit so you 
 
 - Set `TCS_PORT` in `globals.py` to your device (e.g. `/dev/ttyUSB0`, check with `ls /dev/ttyUSB*`).
 - Install `xrandr` for multi-monitor detection: `sudo apt install x11-xserver-utils`.
+- Desktop shortcuts do **not** load `~/.bashrc`. The launcher script sources micromamba directly; if activation still fails, set `MAMBA_ROOT_PREFIX` in your `.desktop` file (default install: `$HOME/micromamba`).
 
 ---
 
