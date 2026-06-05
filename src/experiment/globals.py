@@ -33,7 +33,7 @@ MIN_HOLD_MS = 10
 # --- Hardware and display (edit for your setup) ---
 
 # Serial port for the QST thermode (Windows: COM3, Linux: /dev/ttyUSB0, etc.)
-TCS_PORT = "COM10"
+TCS_PORT = "/dev/ttyUSB0"
 
 # Safety cap for stimulus temperature (°C)
 TCS_MAXIMUM_TEMPERATURE = 45.0
