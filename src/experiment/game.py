@@ -161,8 +161,7 @@ def run_game(
             display.show_attention(on=False)
 
             options = sample_choice_options(stimulus.name, difficulty)
-            chosen = display.show_choices(options)
-            display.show_round_progress(trial_idx)
+            chosen = display.show_choices(options, stimulus.name)
             correct = chosen == stimulus.name
             if correct:
                 score += 1

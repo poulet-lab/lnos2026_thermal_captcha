@@ -20,6 +20,7 @@ STIMULUS_DURATION_MS = int(STIMULUS_DURATION_S * 1000)
 AMPLITUDES = (1, 2, 3, 5, 6, 10)
 TRIALS_PER_PERSON = 10
 ROUND_PROGRESS_PAUSE_S = 1.0
+CHOICE_FEEDBACK_PAUSE_S = 1.0
 CHOICE_COUNT = 6
 
 # Fixed schematic y-range so amplitudes are comparable across all traces.
@@ -39,7 +40,7 @@ TCS_PORT = "/dev/ttyUSB0"
 TCS_MAXIMUM_TEMPERATURE = 45.0
 
 # True = no hardware (testing / development); False = real thermode
-MOCK_TCS = True
+MOCK_TCS = False
 
 # True = real hardware test runs (ranked separately from LNOS event data)
 TROUBLESHOOTING = False

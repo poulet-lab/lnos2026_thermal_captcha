@@ -14,6 +14,7 @@ from PIL import Image, ImageTk
 
 from .globals import (
     CHOICE_COUNT,
+    CHOICE_FEEDBACK_PAUSE_S,
     ROUND_PROGRESS_PAUSE_S,
     SECOND_MONITOR_HEIGHT,
     SECOND_MONITOR_INDEX,
@@ -39,6 +40,9 @@ FG = "#FFFFFF"
 BTN_BG = "#111111"
 BTN_ACTIVE = "#222222"
 TRACE_PAD = "#1a1a1a"
+FEEDBACK_GREEN = "#22c55e"
+FEEDBACK_RED = "#ef4444"
+FEEDBACK_BORDER = 5
 
 
 class _Command(Enum):
@@ -110,7 +114,6 @@ class ParticipantDisplay:
     def show_round_progress(self, trial: int, total: int = TRIALS_PER_PERSON) -> None:
         self._round_progress_event.clear()
         self._round_progress_ready.clear()
-        self._put(_Command.BLANK)
         self._put(_Command.ROUND_PROGRESS, {"trial": trial, "total": total})
         self._round_progress_ready.wait()
         self._round_progress_event.wait()
@@ -144,12 +147,14 @@ class ParticipantDisplay:
         """Backward-compatible alias for wait_for_continue()."""
         self.wait_for_continue()
 
-    def show_choices(self, options: list[str]) -> str:
+    def show_choices(self, options: list[str], correct_name: str) -> str:
         if len(options) != CHOICE_COUNT:
             raise ValueError(f"Expected {CHOICE_COUNT} options, got {len(options)}")
+        if correct_name not in options:
+            raise ValueError(f"Correct stimulus {correct_name!r} not in options")
         self._chosen = None
         self._choice_event.clear()
-        self._put(_Command.CHOICES, {"options": options})
+        self._put(_Command.CHOICES, {"options": options, "correct": correct_name})
         self._choice_event.wait()
         assert self._chosen is not None
         return self._chosen
@@ -215,18 +220,23 @@ class ParticipantDisplay:
         text_stack = tk.Frame(center_frame, bg=BG)
         dot_canvas = tk.Canvas(center_frame, width=120, height=120, bg=BG, highlightthickness=0)
         choices_frame = tk.Frame(center_frame, bg=BG)
+        round_progress_frames: dict[tuple[int, int], tk.Frame] = {}
 
         def clear_text_stack() -> None:
             for child in text_stack.winfo_children():
                 child.destroy()
 
-        def show_bilingual_blocks(blocks: list[tuple[str, str]], *, font=body_font) -> None:
-            clear_text_stack()
+        def add_bilingual_blocks(
+            parent: tk.Frame,
+            blocks: list[tuple[str, str]],
+            *,
+            font=body_font,
+        ) -> None:
             for index, (de, en) in enumerate(blocks):
                 if index > 0:
-                    tk.Frame(text_stack, height=24, bg=BG).pack()
+                    tk.Frame(parent, height=24, bg=BG).pack()
                 tk.Label(
-                    text_stack,
+                    parent,
                     text=de,
                     font=font,
                     bg=BG,
@@ -234,9 +244,11 @@ class ParticipantDisplay:
                     wraplength=1200,
                     justify=tk.CENTER,
                 ).pack(pady=(0, 12))
-                tk.Frame(text_stack, height=2, bg=FG, width=480).pack(fill=tk.X, padx=40, pady=12)
+                tk.Frame(parent, height=2, bg=FG, width=480).pack(
+                    fill=tk.X, padx=40, pady=12
+                )
                 tk.Label(
-                    text_stack,
+                    parent,
                     text=en,
                     font=font,
                     bg=BG,
@@ -244,6 +256,24 @@ class ParticipantDisplay:
                     wraplength=1200,
                     justify=tk.CENTER,
                 ).pack(pady=(12, 0))
+
+        def show_bilingual_blocks(blocks: list[tuple[str, str]], *, font=body_font) -> None:
+            clear_text_stack()
+            add_bilingual_blocks(text_stack, blocks, font=font)
+
+        def get_round_progress_frame(trial: int, total: int) -> tk.Frame:
+            key = (trial, total)
+            frame = round_progress_frames.get(key)
+            if frame is None:
+                frame = tk.Frame(center_frame, bg=BG)
+                add_bilingual_blocks(
+                    frame,
+                    [round_progress_parts(trial, total)],
+                    font=score_font,
+                )
+                round_progress_frames[key] = frame
+                frame.update_idletasks()
+            return frame
 
         def show_titled_bilingual_section(
             de_title: str,
@@ -339,6 +369,8 @@ class ParticipantDisplay:
             center_frame.place_forget()
             for w in (title_label, text_stack, dot_canvas, choices_frame):
                 w.pack_forget()
+            for w in round_progress_frames.values():
+                w.pack_forget()
             clear_text_stack()
             for child in choices_frame.winfo_children():
                 child.destroy()
@@ -388,21 +420,28 @@ class ParticipantDisplay:
             dot_canvas.pack()
 
         def show_round_progress_view(trial: int, total: int) -> None:
+            round_progress_frame = get_round_progress_frame(trial, total)
             hide_all()
-            show_bilingual_blocks([round_progress_parts(trial, total)], font=score_font)
             show_centered()
-            text_stack.pack()
+            round_progress_frame.pack()
             root.update_idletasks()
             root.focus_force()
             if round_progress_after_id[0] is not None:
                 root.after_cancel(round_progress_after_id[0])
             self._round_progress_ready.set()
             pause_ms = int(ROUND_PROGRESS_PAUSE_S * 1000)
-            round_progress_after_id[0] = root.after(
-                pause_ms, self._round_progress_event.set
-            )
+            round_progress_after_id[0] = root.after(pause_ms, finish_round_progress)
 
         round_progress_after_id: list[str | None] = [None]
+
+        def finish_round_progress() -> None:
+            round_progress_after_id[0] = None
+            hide_all()
+            root.update_idletasks()
+            self._round_progress_event.set()
+
+        for trial in range(1, TRIALS_PER_PERSON + 1):
+            get_round_progress_frame(trial, TRIALS_PER_PERSON)
 
         def show_results_view(
             score: int,
@@ -425,9 +464,38 @@ class ParticipantDisplay:
             text_stack.pack()
             root.focus_force()
 
-        def show_choices_view(options: list[str]) -> None:
+        def show_choices_view(options: list[str], correct_name: str) -> None:
             hide_all()
             self._photo_refs.clear()
+            if choice_feedback_after_id[0] is not None:
+                root.after_cancel(choice_feedback_after_id[0])
+                choice_feedback_after_id[0] = None
+
+            choice_frames: dict[str, tk.Frame] = {}
+            choice_locked = [False]
+
+            def finish_choice() -> None:
+                choice_feedback_after_id[0] = None
+                self._choice_event.set()
+
+            def on_click(stim: str) -> None:
+                if choice_locked[0]:
+                    return
+                choice_locked[0] = True
+                self._chosen = stim
+                for btn in choice_frames.values():
+                    for child in btn.winfo_children():
+                        if isinstance(child, tk.Button):
+                            child.config(state=tk.DISABLED)
+                if stim == correct_name:
+                    choice_frames[stim].config(highlightbackground=FEEDBACK_GREEN)
+                else:
+                    choice_frames[stim].config(highlightbackground=FEEDBACK_RED)
+                    choice_frames[correct_name].config(highlightbackground=FEEDBACK_GREEN)
+                root.update_idletasks()
+                pause_ms = int(CHOICE_FEEDBACK_PAUSE_S * 1000)
+                choice_feedback_after_id[0] = root.after(pause_ms, finish_choice)
+
             for i, name in enumerate(options):
                 path = self.traces_dir / f"{name}.png"
                 img = Image.open(path)
@@ -435,24 +503,31 @@ class ParticipantDisplay:
                 photo = ImageTk.PhotoImage(img)
                 self._photo_refs.append(photo)
 
-                def on_click(_event=None, stim=name) -> None:
-                    self._chosen = stim
-                    self._choice_event.set()
-
-                btn = tk.Button(
+                border = tk.Frame(
                     choices_frame,
+                    bg=BG,
+                    highlightthickness=FEEDBACK_BORDER,
+                    highlightbackground=TRACE_PAD,
+                )
+                btn = tk.Button(
+                    border,
                     image=photo,
-                    command=on_click,
+                    command=lambda stim=name: on_click(stim),
                     bd=2,
                     relief=tk.RAISED,
                     bg=TRACE_PAD,
                     activebackground=BTN_ACTIVE,
                     highlightbackground=BTN_BG,
                 )
-                btn.grid(row=i // 3, column=i % 3, padx=16, pady=16)
+                btn.pack()
+                border.grid(row=i // 3, column=i % 3, padx=16, pady=16)
+                choice_frames[name] = border
+
             show_centered()
             choices_frame.pack()
             root.focus_force()
+
+        choice_feedback_after_id: list[str | None] = [None]
 
         queue_wake_pending = [False]
 
@@ -476,7 +551,8 @@ class ParticipantDisplay:
                         d = payload.data
                         show_round_progress_view(d["trial"], d["total"])
                     elif payload.command is _Command.CHOICES:
-                        show_choices_view(payload.data["options"])
+                        d = payload.data
+                        show_choices_view(d["options"], d["correct"])
                     elif payload.command is _Command.RESULTS:
                         d = payload.data
                         show_results_view(
