@@ -129,11 +129,13 @@ MOCK_TCS = True
 # True = real hardware test runs (ranked separately from LNOS event data)
 TROUBLESHOOTING = False
 
-# Which monitor shows the participant UI (0 = leftmost in Windows display order)
-SECOND_MONITOR_INDEX = 0
+# Legacy setting; the participant UI now auto-selects a non-primary monitor.
+SECOND_MONITOR_INDEX = 1
 
-# Fallback horizontal offset if monitor detection fails (often = primary monitor width)
+# Fallback if no non-primary monitor is detected.
 SECOND_MONITOR_OFFSET = 1920
+SECOND_MONITOR_WIDTH = 2048
+SECOND_MONITOR_HEIGHT = 1152
 ```
 
 ### Run environments
@@ -150,10 +152,16 @@ Example: person 8 in `mock_tcs` and person 1 in `lnos` are independent — ranki
 
 ### Finding the right monitor settings
 
-When you start a game, the operator terminal prints detected monitors and which one is used. If the window appears on the wrong screen:
+When you start a game, the operator terminal prints detected monitors and
+which one is used. The participant UI chooses the first detected non-primary
+monitor automatically. If no non-primary monitor is detected, it uses the
+fallback geometry in `globals.py`.
 
-1. Try `SECOND_MONITOR_INDEX = 0`, then `1`, etc.
-2. If detection fails, set `SECOND_MONITOR_OFFSET` to your primary monitor width in pixels (e.g. `1920` or `2560`).
+1. Check that the intended participant screen is not marked as the primary
+   display in Windows or Linux display settings.
+2. If detection fails, set `SECOND_MONITOR_OFFSET` to your primary monitor
+   width in pixels (e.g. `1920` or `2560`) and set `SECOND_MONITOR_WIDTH` /
+   `SECOND_MONITOR_HEIGHT` to the participant monitor resolution.
 
 ---
 
@@ -344,7 +352,7 @@ These paths are created automatically when you run the game.
 Install the sibling repo: `pip install -e ../poulet_py[qst]` (from this project root).
 
 **Participant window on wrong monitor**  
-Adjust `SECOND_MONITOR_INDEX` and `SECOND_MONITOR_OFFSET` in `src/experiment/globals.py`; check monitor lines printed when a game starts.
+Check that the participant display is not the primary monitor. If monitor detection fails, adjust `SECOND_MONITOR_OFFSET`, `SECOND_MONITOR_WIDTH`, and `SECOND_MONITOR_HEIGHT` in `src/experiment/globals.py`; check monitor lines printed when a game starts.
 
 **Missing trace images / choice screen error**  
 Run `python -m src.experiment.generate_schematics`.

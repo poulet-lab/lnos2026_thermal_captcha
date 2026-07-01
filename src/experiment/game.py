@@ -15,13 +15,12 @@ from .display import ParticipantDisplay
 from .globals import (
     CHOICE_COUNT,
     SECOND_MONITOR_HEIGHT,
-    SECOND_MONITOR_INDEX,
     SECOND_MONITOR_OFFSET,
     SECOND_MONITOR_WIDTH,
     TRIALS_PER_PERSON,
     current_environment,
 )
-from .monitors import format_monitors_for_log, get_monitor
+from .monitors import format_monitors_for_log, get_participant_monitor
 from .rankings import is_first_player, score_comparison
 from .responses import append_trial, next_person_number
 from .stimuli import STIMULUS_POOL, StimulusDefinition
@@ -107,14 +106,14 @@ def run_game(
     console.print("[dim]Detected monitors:[/dim]")
     for line in format_monitors_for_log():
         console.print(f"[dim]{line}[/dim]")
-    target = get_monitor(
-        SECOND_MONITOR_INDEX,
+    target = get_participant_monitor(
         SECOND_MONITOR_OFFSET,
         fallback_width=SECOND_MONITOR_WIDTH,
         fallback_height=SECOND_MONITOR_HEIGHT,
     )
+    participant_monitor_kind = "primary" if target.primary else "non-primary"
     console.print(
-        f"[dim]Using monitor [{SECOND_MONITOR_INDEX}]: "
+        f"[dim]Using participant monitor ({participant_monitor_kind}): "
         f"{target.width}x{target.height} at ({target.x}, {target.y})[/dim]"
     )
     console.print()

@@ -45,10 +45,10 @@ MOCK_TCS = False
 # True = real hardware test runs (ranked separately from LNOS event data)
 TROUBLESHOOTING = False
 
-# Which monitor shows the participant UI (0 = leftmost in Windows display order)
+# Legacy setting; the participant UI now auto-selects a non-primary monitor.
 SECOND_MONITOR_INDEX = 1
 
-# Fallback if monitor detection fails (match monitor [1]: 2048x1152 at x=1920)
+# Fallback if no non-primary monitor is detected.
 SECOND_MONITOR_OFFSET = 1920
 SECOND_MONITOR_WIDTH = 2048
 SECOND_MONITOR_HEIGHT = 1152

@@ -3,7 +3,10 @@
 import sys
 
 from src.experiment.monitors import (
+    Monitor,
+    choose_participant_monitor,
     get_monitor,
+    get_participant_monitor,
     list_monitors,
     parse_xrandr_listmonitors,
     parse_xrandr_query,
@@ -14,6 +17,31 @@ def test_get_monitor_fallback():
     mon = get_monitor(99, fallback_offset=1920)
     assert mon.x == 1920
     assert mon.width == 1920
+
+
+def test_choose_participant_monitor_prefers_non_primary():
+    monitors = [
+        Monitor(x=0, y=0, width=1920, height=1080, primary=True),
+        Monitor(x=1920, y=0, width=1920, height=1080, primary=False),
+    ]
+    mon = choose_participant_monitor(monitors)
+    assert mon == monitors[1]
+
+
+def test_get_participant_monitor_uses_offset_without_non_primary(monkeypatch):
+    monitors = [Monitor(x=0, y=0, width=1920, height=1080, primary=True)]
+    monkeypatch.setattr("src.experiment.monitors.list_monitors", lambda: monitors)
+
+    mon = get_participant_monitor(
+        fallback_offset=1920,
+        fallback_width=2048,
+        fallback_height=1152,
+    )
+
+    assert mon.x == 1920
+    assert mon.width == 2048
+    assert mon.height == 1152
+    assert mon.primary is False
 
 
 def test_list_monitors_on_windows():

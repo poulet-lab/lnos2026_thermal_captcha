@@ -17,13 +17,12 @@ from .globals import (
     CHOICE_FEEDBACK_PAUSE_S,
     ROUND_PROGRESS_PAUSE_S,
     SECOND_MONITOR_HEIGHT,
-    SECOND_MONITOR_INDEX,
     SECOND_MONITOR_OFFSET,
     SECOND_MONITOR_WIDTH,
     STIMULUS_TRACES_DIR,
     TRIALS_PER_PERSON,
 )
-from .monitors import force_window_to_monitor, get_monitor
+from .monitors import force_window_to_monitor, get_participant_monitor
 from .ui_strings import (
     comparison_results_sections,
     first_player_results_sections,
@@ -590,8 +589,7 @@ class ParticipantDisplay:
         self._root = None
 
     def _place_on_second_monitor(self, root: tk.Tk):
-        monitor = get_monitor(
-            SECOND_MONITOR_INDEX,
+        monitor = get_participant_monitor(
             fallback_offset=SECOND_MONITOR_OFFSET,
             fallback_width=SECOND_MONITOR_WIDTH,
             fallback_height=SECOND_MONITOR_HEIGHT,

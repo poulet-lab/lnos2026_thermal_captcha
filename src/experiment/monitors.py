@@ -164,7 +164,53 @@ def get_monitor(
             primary=False,
         )
 
-    return Monitor(x=0, y=0, width=fallback_width, height=fallback_height, primary=True)
+    return Monitor(
+        x=0,
+        y=0,
+        width=fallback_width,
+        height=fallback_height,
+        primary=True,
+    )
+
+
+def choose_participant_monitor(monitors: list[Monitor]) -> Monitor | None:
+    """Return the first detected monitor that is not marked primary."""
+    for monitor in monitors:
+        if not monitor.primary:
+            return monitor
+    return None
+
+
+def get_participant_monitor(
+    fallback_offset: int = 0,
+    fallback_width: int = 1920,
+    fallback_height: int = 1080,
+) -> Monitor:
+    """Return the participant display monitor, preferring a non-primary screen."""
+    monitors = list_monitors()
+    monitor = choose_participant_monitor(monitors)
+    if monitor is not None:
+        return monitor
+
+    if fallback_offset > 0:
+        return Monitor(
+            x=fallback_offset,
+            y=0,
+            width=fallback_width,
+            height=fallback_height,
+            primary=False,
+        )
+
+    if monitors:
+        return monitors[0]
+
+    return Monitor(
+        x=0,
+        y=0,
+        width=fallback_width,
+        height=fallback_height,
+        primary=True,
+    )
 
 
 def force_window_to_monitor(hwnd: int, monitor: Monitor) -> None:
